@@ -51,6 +51,9 @@ export function WorkspaceView({
   const currentMessages = messages.filter(
     (message) => message.nodeId === currentNode.id,
   )
+  const completedNodes = nodes.filter(
+    (node) => node.status === 'mastered' || node.status === 'merged',
+  ).length
 
   return (
     <main className="workspace-view">
@@ -67,9 +70,12 @@ export function WorkspaceView({
           <span className="eyebrow">ACTIVE LEARNING PATH</span>
           <strong>{topic}</strong>
         </div>
-        <div className="save-state">
+        <div
+          className="workspace-progress"
+          aria-label={`${nodes.length} 个节点中已完成 ${completedNodes} 个`}
+        >
           <span />
-          本地原型 · 已同步
+          {completedNodes}/{nodes.length} 节点完成
         </div>
       </header>
 
@@ -98,11 +104,15 @@ export function WorkspaceView({
           onContextModeChange={onContextModeChange}
         />
         <ConversationPanel
+          key={currentNode.id}
           node={currentNode}
           parent={parent}
           messages={currentMessages}
+          completedNodes={completedNodes}
+          totalNodes={nodes.length}
           isGenerating={isGenerating}
           onSendMessage={onSendMessage}
+          onNodeAction={onNodeAction}
         />
       </div>
     </main>

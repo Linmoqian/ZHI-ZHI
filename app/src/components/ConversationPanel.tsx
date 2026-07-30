@@ -5,27 +5,48 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react'
-import type { LearningNode, Message } from '../types'
+import type {
+  LearningNode,
+  Message,
+  NodeAction,
+  NodeStatus,
+} from '../types'
+import { LearningGuide } from './LearningGuide'
 import { PixelIcon } from './PixelIcon'
 
 type ConversationPanelProps = {
   node: LearningNode
   parent: LearningNode | null
   messages: Message[]
+  completedNodes: number
+  totalNodes: number
   isGenerating: boolean
   onSendMessage: (content: string) => void
+  onNodeAction: (nodeId: string, action: NodeAction) => void
 }
 
 const quickPrompts = ['换个直觉类比', '给我一个最小例子', '检查我的理解']
+
+const statusLabels: Record<NodeStatus, string> = {
+  current: '正在学习',
+  exploring: '探索中',
+  mastered: '已掌握',
+  merged: '已合并',
+  locked: '待解锁',
+}
 
 export function ConversationPanel({
   node,
   parent,
   messages,
+  completedNodes,
+  totalNodes,
   isGenerating,
   onSendMessage,
+  onNodeAction,
 }: ConversationPanelProps) {
   const [draft, setDraft] = useState('')
+  const [isGuideOpen, setIsGuideOpen] = useState(true)
   const messageEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -54,7 +75,12 @@ export function ConversationPanel({
   }
 
   return (
-    <section className="workspace-panel conversation-panel" aria-label="当前节点对话">
+    <section
+      className={`workspace-panel conversation-panel ${
+        isGuideOpen ? 'has-learning-guide' : ''
+      }`}
+      aria-label="当前节点对话"
+    >
       <header className="conversation-header">
         <div className={`conversation-node-mark tone-${node.tone}`}>
           <PixelIcon name="branch" />
@@ -67,13 +93,44 @@ export function ConversationPanel({
           </div>
           <h2>{node.title}</h2>
         </div>
-        <span className="conversation-status">
+        <span
+          className={`conversation-status tone-${node.tone}`}
+          aria-label={`节点状态：${statusLabels[node.status]}，${
+            node.contextMode === 'inherit' ? '继承父节点上下文' : '独立上下文'
+          }`}
+        >
           <i />
-          本地学习原型
+          {statusLabels[node.status]} ·
+          {node.contextMode === 'inherit' ? ' 继承上下文' : ' 独立上下文'}
         </span>
       </header>
 
-      <div className="message-list" aria-live="polite">
+      {isGuideOpen ? (
+        <LearningGuide
+          node={node}
+          parent={parent}
+          completedNodes={completedNodes}
+          totalNodes={totalNodes}
+          onClose={() => setIsGuideOpen(false)}
+          onNodeAction={onNodeAction}
+        />
+      ) : (
+        <button
+          className="learning-guide-tab"
+          type="button"
+          aria-label="展开学习引导"
+          onClick={() => setIsGuideOpen(true)}
+        >
+          <PixelIcon name="book" />
+          <span>学习引导</span>
+        </button>
+      )}
+
+      <div
+        className="message-list"
+        aria-busy={isGenerating}
+        aria-live="polite"
+      >
         <div className="topic-context">
           <PixelIcon name="spark" />
           <div>

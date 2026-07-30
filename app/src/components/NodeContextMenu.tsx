@@ -70,7 +70,6 @@ export function NodeContextMenu({
               >
                 <PixelIcon name="plus" />
                 <span>创建概念分支</span>
-                <kbd>N</kbd>
               </ContextMenu.Item>
               <ContextMenu.Item
                 className="node-menu-item"

@@ -11,6 +11,7 @@ import {
   useNodesState,
   type Edge,
   type EdgeProps,
+  type MiniMapNodeProps,
   type Node,
   type NodeChange,
   type NodeProps,
@@ -48,11 +49,27 @@ type BranchMapProps = {
 }
 
 const toneColors: Record<NodeTone, string> = {
-  blue: '#3d82ed',
+  blue: '#4285ea',
   green: '#43b889',
   purple: '#9370d5',
   orange: '#e4a329',
   gray: '#a8a39a',
+}
+
+const toneDarkColors: Record<NodeTone, string> = {
+  blue: '#2465c4',
+  green: '#278b67',
+  purple: '#704eae',
+  orange: '#b9780d',
+  gray: '#77736c',
+}
+
+const toneLightColors: Record<NodeTone, string> = {
+  blue: '#b7d3fa',
+  green: '#aee4cf',
+  purple: '#d2c0f1',
+  orange: '#f8d98b',
+  gray: '#d8d4cd',
 }
 
 const statusLabels: Record<NodeStatus, string> = {
@@ -92,6 +109,14 @@ function PixelNode({ data, selected }: NodeProps<PixelFlowNode>) {
         <strong>{node.title}</strong>
         <small>{statusLabels[node.status]}</small>
       </span>
+      <span
+        className="pixel-node__foot pixel-node__foot--left"
+        aria-hidden="true"
+      />
+      <span
+        className="pixel-node__foot pixel-node__foot--right"
+        aria-hidden="true"
+      />
       <Handle className="pixel-handle" type="source" position={Position.Bottom} />
     </NodeContextMenu>
   )
@@ -109,7 +134,10 @@ function PixelEdge({
   const snap = (value: number) => Math.round(value / 4) * 4
   const middleY = snap(sourceY + (targetY - sourceY) / 2)
   const path = `M ${snap(sourceX)} ${snap(sourceY)} V ${middleY} H ${snap(targetX)} V ${snap(targetY)}`
-  const color = data ? toneColors[data.tone] : toneColors.gray
+  const tone = data?.tone ?? 'gray'
+  const color = toneColors[tone]
+  const darkColor = toneDarkColors[tone]
+  const lightColor = toneLightColors[tone]
 
   return (
     <>
@@ -117,9 +145,22 @@ function PixelEdge({
         id={`${id}-shadow`}
         path={path}
         style={{
-          stroke: '#d1c9bb',
-          strokeWidth: selected ? 8 : 7,
-          transform: 'translate(3px, 4px)',
+          stroke: '#c9c0b2',
+          strokeWidth: selected ? 11 : 10,
+          strokeDasharray: '8 2',
+          transform: 'translate(4px, 6px)',
+          shapeRendering: 'crispEdges',
+        }}
+        interactionWidth={0}
+      />
+      <BaseEdge
+        id={`${id}-depth`}
+        path={path}
+        style={{
+          stroke: darkColor,
+          strokeWidth: selected ? 9 : 8,
+          strokeDasharray: '8 2',
+          transform: 'translateY(2px)',
           shapeRendering: 'crispEdges',
         }}
         interactionWidth={0}
@@ -129,10 +170,23 @@ function PixelEdge({
         path={path}
         style={{
           stroke: color,
-          strokeWidth: selected ? 5 : 4,
+          strokeWidth: selected ? 7 : 6,
+          strokeDasharray: '8 2',
           shapeRendering: 'crispEdges',
         }}
         interactionWidth={18}
+      />
+      <BaseEdge
+        id={`${id}-highlight`}
+        path={path}
+        style={{
+          stroke: lightColor,
+          strokeWidth: selected ? 2.5 : 2,
+          strokeDasharray: '6 4',
+          transform: 'translate(-1px, -1px)',
+          shapeRendering: 'crispEdges',
+        }}
+        interactionWidth={0}
       />
     </>
   )
@@ -140,6 +194,35 @@ function PixelEdge({
 
 const nodeTypes = { pixel: PixelNode }
 const edgeTypes = { pixel: PixelEdge }
+
+function MiniBlockNode({
+  id,
+  x,
+  y,
+  width,
+  height,
+  color,
+  className,
+  selected,
+  shapeRendering,
+  onClick,
+}: MiniMapNodeProps) {
+  const size = Math.min(56, width, height)
+
+  return (
+    <rect
+      className={`react-flow__minimap-node mini-block-node ${selected ? 'selected' : ''} ${className}`}
+      data-node-id={id}
+      x={x + (width - size) / 2}
+      y={y + (height - size) / 2}
+      width={size}
+      height={size}
+      style={{ fill: color }}
+      shapeRendering={shapeRendering}
+      onClick={onClick ? (event) => onClick(event, id) : undefined}
+    />
+  )
+}
 
 export function BranchMap({
   nodes,
@@ -229,7 +312,8 @@ export function BranchMap({
         <div className="map-header-actions">
           <span className="map-shortcut-hint">
             <PixelIcon name="more" />
-            右键节点操作
+            <span className="map-shortcut-hint__desktop">右键节点操作</span>
+            <span className="map-shortcut-hint__mobile">长按节点操作</span>
           </span>
           <span className="panel-count">{nodes.length} 个节点</span>
         </div>
@@ -238,7 +322,9 @@ export function BranchMap({
       <div className="map-legend" aria-label="节点状态图例">
         <span><i className="tone-blue" />当前路径</span>
         <span><i className="tone-green" />已掌握</span>
-        <span><i className="tone-orange" />待探索</span>
+        <span><i className="tone-purple" />概念分支</span>
+        <span><i className="tone-orange" />待解决</span>
+        <span><i className="tone-gray" />待解锁</span>
       </div>
 
       <div className="branch-canvas" data-testid="branch-map">
@@ -256,7 +342,7 @@ export function BranchMap({
           maxZoom={1.6}
           fitView
           fitViewOptions={{ padding: 0.22 }}
-          proOptions={{ hideAttribution: false }}
+          proOptions={{ hideAttribution: true }}
         >
           <Background
             variant={BackgroundVariant.Lines}
@@ -266,16 +352,25 @@ export function BranchMap({
           />
           <MiniMap
             className="branch-minimap"
-            nodeColor={(node) =>
-              node.id === currentNodeId ? '#356fc9' : '#c9d7e8'
-            }
+            nodeColor={(node) => {
+              const flowNode = node as PixelFlowNode
+              return toneColors[flowNode.data.node.tone]
+            }}
+            nodeComponent={MiniBlockNode}
             nodeStrokeWidth={0}
             nodeBorderRadius={0}
-            maskColor="rgba(249, 246, 238, 0.64)"
+            position="bottom-left"
+            maskColor="transparent"
+            ariaLabel="学习路径简图"
+            onNodeClick={(_, node) => onSelectNode(node.id)}
             pannable
             zoomable
           />
-          <Controls className="branch-controls" showInteractive={false} />
+          <Controls
+            className="branch-controls"
+            position="bottom-right"
+            showInteractive={false}
+          />
         </ReactFlow>
       </div>
     </section>
