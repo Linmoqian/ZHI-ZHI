@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type {
   CanvasPosition,
   ContextMode,
@@ -46,6 +47,8 @@ export function WorkspaceView({
   onSendMessage,
   onContextModeChange,
 }: WorkspaceViewProps) {
+  const [isMapVisible, setIsMapVisible] = useState(true)
+  const [isGuideMinimized, setIsGuideMinimized] = useState(false)
   const parent =
     nodes.find((node) => node.id === currentNode.parentId) ?? null
   const currentMessages = messages.filter(
@@ -94,7 +97,11 @@ export function WorkspaceView({
         ))}
       </div>
 
-      <div className={`workspace-grid active-panel-${currentPanel}`}>
+      <div
+        className={`workspace-grid active-panel-${currentPanel} ${
+          isMapVisible ? '' : 'is-map-hidden'
+        }`}
+      >
         <BranchMap
           nodes={nodes}
           currentNodeId={currentNode.id}
@@ -102,15 +109,34 @@ export function WorkspaceView({
           onMoveNode={onMoveNode}
           onNodeAction={onNodeAction}
           onContextModeChange={onContextModeChange}
+          onHide={() => setIsMapVisible(false)}
         />
+        {!isMapVisible ? (
+          <button
+            className="map-reveal-tab"
+            type="button"
+            aria-label="显示知识地图"
+            title="显示知识地图"
+            onClick={() => setIsMapVisible(true)}
+          >
+            <PixelIcon name="map" />
+            <span>显示地图</span>
+          </button>
+        ) : null}
         <ConversationPanel
           key={currentNode.id}
           node={currentNode}
+          nodes={nodes}
           parent={parent}
           messages={currentMessages}
           completedNodes={completedNodes}
           totalNodes={nodes.length}
+          isGuideMinimized={isGuideMinimized}
           isGenerating={isGenerating}
+          onGuideToggle={() =>
+            setIsGuideMinimized((current) => !current)
+          }
+          onSelectNode={onSelectNode}
           onSendMessage={onSendMessage}
           onNodeAction={onNodeAction}
         />

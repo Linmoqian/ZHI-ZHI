@@ -5,13 +5,11 @@ import {
   BaseEdge,
   Controls,
   Handle,
-  MiniMap,
   Position,
   ReactFlow,
   useNodesState,
   type Edge,
   type EdgeProps,
-  type MiniMapNodeProps,
   type Node,
   type NodeChange,
   type NodeProps,
@@ -25,6 +23,7 @@ import type {
   NodeStatus,
   NodeTone,
 } from '../types'
+import { LearningPathOverview } from './LearningPathOverview'
 import { NodeContextMenu } from './NodeContextMenu'
 import { PixelIcon } from './PixelIcon'
 
@@ -46,6 +45,7 @@ type BranchMapProps = {
   onMoveNode: (nodeId: string, position: CanvasPosition) => void
   onNodeAction: (nodeId: string, action: NodeAction) => void
   onContextModeChange: (nodeId: string, mode: ContextMode) => void
+  onHide: () => void
 }
 
 const toneColors: Record<NodeTone, string> = {
@@ -195,35 +195,6 @@ function PixelEdge({
 const nodeTypes = { pixel: PixelNode }
 const edgeTypes = { pixel: PixelEdge }
 
-function MiniBlockNode({
-  id,
-  x,
-  y,
-  width,
-  height,
-  color,
-  className,
-  selected,
-  shapeRendering,
-  onClick,
-}: MiniMapNodeProps) {
-  const size = Math.min(56, width, height)
-
-  return (
-    <rect
-      className={`react-flow__minimap-node mini-block-node ${selected ? 'selected' : ''} ${className}`}
-      data-node-id={id}
-      x={x + (width - size) / 2}
-      y={y + (height - size) / 2}
-      width={size}
-      height={size}
-      style={{ fill: color }}
-      shapeRendering={shapeRendering}
-      onClick={onClick ? (event) => onClick(event, id) : undefined}
-    />
-  )
-}
-
 export function BranchMap({
   nodes,
   currentNodeId,
@@ -231,6 +202,7 @@ export function BranchMap({
   onMoveNode,
   onNodeAction,
   onContextModeChange,
+  onHide,
 }: BranchMapProps) {
   const mappedFlowNodes = useMemo<PixelFlowNode[]>(
     () =>
@@ -310,6 +282,15 @@ export function BranchMap({
           <h2>知识地图</h2>
         </div>
         <div className="map-header-actions">
+          <button
+            className="map-hide-button"
+            type="button"
+            aria-label="隐藏知识地图"
+            title="隐藏知识地图"
+            onClick={onHide}
+          >
+            <PixelIcon name="chevron-left" />
+          </button>
           <span className="map-shortcut-hint">
             <PixelIcon name="more" />
             <span className="map-shortcut-hint__desktop">右键节点操作</span>
@@ -350,28 +331,18 @@ export function BranchMap({
             size={0.5}
             color="#ddd5c7"
           />
-          <MiniMap
-            className="branch-minimap"
-            nodeColor={(node) => {
-              const flowNode = node as PixelFlowNode
-              return toneColors[flowNode.data.node.tone]
-            }}
-            nodeComponent={MiniBlockNode}
-            nodeStrokeWidth={0}
-            nodeBorderRadius={0}
-            position="bottom-left"
-            maskColor="transparent"
-            ariaLabel="学习路径简图"
-            onNodeClick={(_, node) => onSelectNode(node.id)}
-            pannable
-            zoomable
-          />
           <Controls
             className="branch-controls"
             position="bottom-right"
             showInteractive={false}
           />
         </ReactFlow>
+        <LearningPathOverview
+          className="branch-overview"
+          nodes={nodes}
+          currentNodeId={currentNodeId}
+          onSelectNode={onSelectNode}
+        />
       </div>
     </section>
   )

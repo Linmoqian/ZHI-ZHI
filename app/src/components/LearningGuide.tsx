@@ -1,13 +1,17 @@
 import type { LearningNode, NodeAction, NodeStatus } from '../types'
+import { LearningPathOverview } from './LearningPathOverview'
 import { PixelIcon } from './PixelIcon'
 
 type LearningGuideProps = {
   node: LearningNode
+  nodes: LearningNode[]
   parent: LearningNode | null
   completedNodes: number
   totalNodes: number
-  onClose: () => void
+  minimized: boolean
+  onToggleMinimized: () => void
   onNodeAction: (nodeId: string, action: NodeAction) => void
+  onSelectNode: (nodeId: string) => void
 }
 
 const statusLabels: Record<NodeStatus, string> = {
@@ -20,11 +24,14 @@ const statusLabels: Record<NodeStatus, string> = {
 
 export function LearningGuide({
   node,
+  nodes,
   parent,
   completedNodes,
   totalNodes,
-  onClose,
+  minimized,
+  onToggleMinimized,
   onNodeAction,
+  onSelectNode,
 }: LearningGuideProps) {
   const isLocked = node.status === 'locked'
   const isCompleted =
@@ -34,6 +41,31 @@ export function LearningGuide({
     totalNodes === 0
       ? 0
       : Math.round((completedNodes / totalNodes) * segmentCount)
+
+  if (minimized) {
+    return (
+      <aside
+        className={`learning-guide learning-guide--minimized tone-${node.tone}`}
+        aria-label="学习引导已最小化"
+      >
+        <button
+          className="learning-guide__restore"
+          type="button"
+          aria-label="展开学习引导"
+          onClick={onToggleMinimized}
+        >
+          <span className="learning-guide__mark">
+            <PixelIcon name="branch" />
+          </span>
+          <span>
+            <small>LEARNING GUIDE</small>
+            <strong>{node.title}</strong>
+          </span>
+          <b aria-hidden="true">＋</b>
+        </button>
+      </aside>
+    )
+  }
 
   return (
     <aside
@@ -49,12 +81,13 @@ export function LearningGuide({
           <strong>学习引导</strong>
         </div>
         <button
-          className="learning-guide__close"
+          className="learning-guide__minimize"
           type="button"
-          aria-label="收起学习引导"
-          onClick={onClose}
+          aria-label="最小化学习引导"
+          title="最小化学习引导"
+          onClick={onToggleMinimized}
         >
-          ×
+          −
         </button>
       </header>
 
@@ -101,6 +134,19 @@ export function LearningGuide({
             </dd>
           </div>
         </dl>
+
+        <section className="learning-guide__overview-section">
+          <div>
+            <strong>路径关系</strong>
+            <span>按父子关系自动排列</span>
+          </div>
+          <LearningPathOverview
+            className="learning-guide__overview"
+            nodes={nodes}
+            currentNodeId={node.id}
+            onSelectNode={onSelectNode}
+          />
+        </section>
       </div>
 
       <footer className="learning-guide__actions">

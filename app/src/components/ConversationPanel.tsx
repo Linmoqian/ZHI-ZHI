@@ -16,11 +16,15 @@ import { PixelIcon } from './PixelIcon'
 
 type ConversationPanelProps = {
   node: LearningNode
+  nodes: LearningNode[]
   parent: LearningNode | null
   messages: Message[]
   completedNodes: number
   totalNodes: number
+  isGuideMinimized: boolean
   isGenerating: boolean
+  onGuideToggle: () => void
+  onSelectNode: (nodeId: string) => void
   onSendMessage: (content: string) => void
   onNodeAction: (nodeId: string, action: NodeAction) => void
 }
@@ -37,16 +41,19 @@ const statusLabels: Record<NodeStatus, string> = {
 
 export function ConversationPanel({
   node,
+  nodes,
   parent,
   messages,
   completedNodes,
   totalNodes,
+  isGuideMinimized,
   isGenerating,
+  onGuideToggle,
+  onSelectNode,
   onSendMessage,
   onNodeAction,
 }: ConversationPanelProps) {
   const [draft, setDraft] = useState('')
-  const [isGuideOpen, setIsGuideOpen] = useState(true)
   const messageEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -77,7 +84,7 @@ export function ConversationPanel({
   return (
     <section
       className={`workspace-panel conversation-panel ${
-        isGuideOpen ? 'has-learning-guide' : ''
+        isGuideMinimized ? 'has-minimized-guide' : 'has-learning-guide'
       }`}
       aria-label="当前节点对话"
     >
@@ -105,26 +112,17 @@ export function ConversationPanel({
         </span>
       </header>
 
-      {isGuideOpen ? (
-        <LearningGuide
-          node={node}
-          parent={parent}
-          completedNodes={completedNodes}
-          totalNodes={totalNodes}
-          onClose={() => setIsGuideOpen(false)}
-          onNodeAction={onNodeAction}
-        />
-      ) : (
-        <button
-          className="learning-guide-tab"
-          type="button"
-          aria-label="展开学习引导"
-          onClick={() => setIsGuideOpen(true)}
-        >
-          <PixelIcon name="book" />
-          <span>学习引导</span>
-        </button>
-      )}
+      <LearningGuide
+        node={node}
+        nodes={nodes}
+        parent={parent}
+        completedNodes={completedNodes}
+        totalNodes={totalNodes}
+        minimized={isGuideMinimized}
+        onToggleMinimized={onGuideToggle}
+        onNodeAction={onNodeAction}
+        onSelectNode={onSelectNode}
+      />
 
       <div
         className="message-list"
