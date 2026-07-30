@@ -22,6 +22,7 @@ import type {
   ContextMode,
   LearningNode,
   Message,
+  NodeAction,
   NodeTone,
   WorkspacePanel,
 } from './types'
@@ -198,13 +199,14 @@ function App() {
     [currentNode, isGenerating],
   )
 
-  const createBranch = useCallback(() => {
-    if (!currentNode || currentNode.status === 'locked') {
+  const createBranch = useCallback((nodeId: string) => {
+    const sourceNode = nodes.find((node) => node.id === nodeId)
+    if (!sourceNode || sourceNode.status === 'locked') {
       return
     }
 
     const siblings = nodes.filter(
-      (node) => node.parentId === currentNode.id,
+      (node) => node.parentId === sourceNode.id,
     ).length
     const branchNumber = siblings + 1
     const branchId = createLocalId('branch')
@@ -212,21 +214,21 @@ function App() {
     const tone = branchTones[siblings % branchTones.length]
     const nextNode: LearningNode = {
       id: branchId,
-      parentId: currentNode.id,
+      parentId: sourceNode.id,
       title: `新概念分支 ${branchNumber}`,
-      summary: `从“${currentNode.title}”独立探索的新问题。`,
+      summary: `从“${sourceNode.title}”独立探索的新问题。`,
       status: 'current',
       tone,
       position: {
-        x: currentNode.position.x + horizontalDirection * (136 + siblings * 20),
-        y: currentNode.position.y + 172,
+        x: sourceNode.position.x + horizontalDirection * (136 + siblings * 20),
+        y: sourceNode.position.y + 172,
       },
       contextMode: 'inherit',
     }
 
     setNodes((currentNodes) => [
       ...currentNodes.map((node) =>
-        node.id === currentNode.id && node.status === 'current'
+        node.status === 'current'
           ? { ...node, status: 'exploring' as const }
           : node,
       ),
@@ -248,18 +250,19 @@ function App() {
     showToast('新概念分支已创建')
     emitDebugEvent('node:create', {
       nodeId: branchId,
-      parentId: currentNode.id,
+      parentId: sourceNode.id,
     })
-  }, [currentNode, nodes, showToast])
+  }, [nodes, showToast])
 
-  const returnToParent = useCallback(() => {
-    if (!currentNode?.parentId) {
+  const returnToParent = useCallback((nodeId: string) => {
+    const sourceNode = nodes.find((node) => node.id === nodeId)
+    if (!sourceNode?.parentId) {
       return
     }
-    const parentId = currentNode.parentId
+    const parentId = sourceNode.parentId
     setNodes((currentNodes) =>
       currentNodes.map((node) => {
-        if (node.id === currentNode.id && node.status === 'current') {
+        if (node.id === sourceNode.id && node.status === 'current') {
           return { ...node, status: 'exploring' }
         }
         if (node.id === parentId && node.status === 'exploring') {
@@ -272,19 +275,20 @@ function App() {
     setCurrentPanel('conversation')
     showToast('已返回父节点')
     emitDebugEvent('node:select', { nodeId: parentId, source: 'parent' })
-  }, [currentNode, showToast])
+  }, [nodes, showToast])
 
-  const mergeToParent = useCallback(() => {
-    if (!currentNode?.parentId || currentNode.status === 'locked') {
+  const mergeToParent = useCallback((nodeId: string) => {
+    const sourceNode = nodes.find((node) => node.id === nodeId)
+    if (!sourceNode?.parentId || sourceNode.status === 'locked') {
       return
     }
 
-    const parentId = currentNode.parentId
-    const childTitle = currentNode.title
-    const childSummary = currentNode.summary
+    const parentId = sourceNode.parentId
+    const childTitle = sourceNode.title
+    const childSummary = sourceNode.summary
     setNodes((currentNodes) =>
       currentNodes.map((node) => {
-        if (node.id === currentNode.id) {
+        if (node.id === sourceNode.id) {
           return { ...node, status: 'merged' }
         }
         if (node.id === parentId && node.status === 'exploring') {
@@ -307,44 +311,61 @@ function App() {
     setCurrentPanel('conversation')
     showToast('分支结论已合并到父节点')
     emitDebugEvent('node:merge', {
-      nodeId: currentNode.id,
+      nodeId: sourceNode.id,
       parentId,
     })
-  }, [currentNode, showToast])
+  }, [nodes, showToast])
 
-  const markMastered = useCallback(() => {
-    if (!currentNode || currentNode.status === 'locked') {
+  const markMastered = useCallback((nodeId: string) => {
+    const sourceNode = nodes.find((node) => node.id === nodeId)
+    if (!sourceNode || sourceNode.status === 'locked') {
       return
     }
     setNodes((currentNodes) =>
       currentNodes.map((node) =>
-        node.id === currentNode.id ? { ...node, status: 'mastered' } : node,
+        node.id === sourceNode.id ? { ...node, status: 'mastered' } : node,
       ),
     )
     showToast('已标记为掌握')
     emitDebugEvent('node:update', {
-      nodeId: currentNode.id,
+      nodeId: sourceNode.id,
       status: 'mastered',
     })
-  }, [currentNode, showToast])
+  }, [nodes, showToast])
 
   const changeContextMode = useCallback(
-    (mode: ContextMode) => {
-      if (!currentNode) {
+    (nodeId: string, mode: ContextMode) => {
+      const sourceNode = nodes.find((node) => node.id === nodeId)
+      if (!sourceNode) {
         return
       }
       setNodes((currentNodes) =>
         currentNodes.map((node) =>
-          node.id === currentNode.id ? { ...node, contextMode: mode } : node,
+          node.id === sourceNode.id ? { ...node, contextMode: mode } : node,
         ),
       )
       showToast(mode === 'inherit' ? '已继承父节点上下文' : '已隔离同级分支')
       emitDebugEvent('node:update', {
-        nodeId: currentNode.id,
+        nodeId: sourceNode.id,
         contextMode: mode,
       })
     },
-    [currentNode, showToast],
+    [nodes, showToast],
+  )
+
+  const handleNodeAction = useCallback(
+    (nodeId: string, action: NodeAction) => {
+      if (action === 'create-branch') {
+        createBranch(nodeId)
+      } else if (action === 'merge-parent') {
+        mergeToParent(nodeId)
+      } else if (action === 'return-parent') {
+        returnToParent(nodeId)
+      } else {
+        markMastered(nodeId)
+      }
+    },
+    [createBranch, markMastered, mergeToParent, returnToParent],
   )
 
   return (
@@ -377,11 +398,8 @@ function App() {
             onBackHome={goHome}
             onSelectNode={selectNode}
             onMoveNode={moveNode}
+            onNodeAction={handleNodeAction}
             onSendMessage={sendMessage}
-            onCreateBranch={createBranch}
-            onReturnToParent={returnToParent}
-            onMerge={mergeToParent}
-            onMarkMastered={markMastered}
             onContextModeChange={changeContextMode}
           />
         </Suspense>

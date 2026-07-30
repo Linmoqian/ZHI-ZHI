@@ -1,6 +1,12 @@
 export type AppView = 'home' | 'workspace'
 
-export type WorkspacePanel = 'map' | 'conversation' | 'inspector'
+export type WorkspacePanel = 'map' | 'conversation'
+
+export type NodeAction =
+  | 'create-branch'
+  | 'merge-parent'
+  | 'return-parent'
+  | 'mark-mastered'
 
 export type NodeStatus =
   | 'current'

@@ -18,18 +18,21 @@ import {
 import '@xyflow/react/dist/style.css'
 import type {
   CanvasPosition,
+  ContextMode,
   LearningNode,
+  NodeAction,
   NodeStatus,
   NodeTone,
 } from '../types'
+import { NodeContextMenu } from './NodeContextMenu'
 import { PixelIcon } from './PixelIcon'
 
 type PixelNodeData = {
-  title: string
-  summary: string
-  status: NodeStatus
-  tone: NodeTone
+  node: LearningNode
   isCurrent: boolean
+  onOpen: (nodeId: string) => void
+  onAction: (nodeId: string, action: NodeAction) => void
+  onContextModeChange: (nodeId: string, mode: ContextMode) => void
 }
 
 type PixelFlowNode = Node<PixelNodeData, 'pixel'>
@@ -40,6 +43,8 @@ type BranchMapProps = {
   currentNodeId: string
   onSelectNode: (nodeId: string) => void
   onMoveNode: (nodeId: string, position: CanvasPosition) => void
+  onNodeAction: (nodeId: string, action: NodeAction) => void
+  onContextModeChange: (nodeId: string, mode: ContextMode) => void
 }
 
 const toneColors: Record<NodeTone, string> = {
@@ -59,29 +64,36 @@ const statusLabels: Record<NodeStatus, string> = {
 }
 
 function PixelNode({ data, selected }: NodeProps<PixelFlowNode>) {
+  const { node } = data
   const statusIcon =
-    data.status === 'mastered'
+    node.status === 'mastered'
       ? 'check'
-      : data.status === 'locked'
+      : node.status === 'locked'
         ? 'lock'
-        : data.status === 'merged'
+        : node.status === 'merged'
           ? 'merge'
           : 'branch'
 
   return (
-    <div
-      className={`pixel-node tone-${data.tone} ${data.isCurrent || selected ? 'is-current' : ''} ${data.status === 'locked' ? 'is-locked' : ''}`}
+    <NodeContextMenu
+      node={node}
+      isCurrent={data.isCurrent || selected}
+      onOpen={() => data.onOpen(node.id)}
+      onAction={(action) => data.onAction(node.id, action)}
+      onContextModeChange={(mode) =>
+        data.onContextModeChange(node.id, mode)
+      }
     >
       <Handle className="pixel-handle" type="target" position={Position.Top} />
       <span className="pixel-node__icon">
         <PixelIcon name={statusIcon} />
       </span>
       <span className="pixel-node__copy">
-        <strong>{data.title}</strong>
-        <small>{statusLabels[data.status]}</small>
+        <strong>{node.title}</strong>
+        <small>{statusLabels[node.status]}</small>
       </span>
       <Handle className="pixel-handle" type="source" position={Position.Bottom} />
-    </div>
+    </NodeContextMenu>
   )
 }
 
@@ -134,6 +146,8 @@ export function BranchMap({
   currentNodeId,
   onSelectNode,
   onMoveNode,
+  onNodeAction,
+  onContextModeChange,
 }: BranchMapProps) {
   const mappedFlowNodes = useMemo<PixelFlowNode[]>(
     () =>
@@ -144,14 +158,20 @@ export function BranchMap({
         draggable: node.status !== 'locked',
         selected: node.id === currentNodeId,
         data: {
-          title: node.title,
-          summary: node.summary,
-          status: node.status,
-          tone: node.tone,
+          node,
           isCurrent: node.id === currentNodeId,
+          onOpen: onSelectNode,
+          onAction: onNodeAction,
+          onContextModeChange,
         },
       })),
-    [currentNodeId, nodes],
+    [
+      currentNodeId,
+      nodes,
+      onContextModeChange,
+      onNodeAction,
+      onSelectNode,
+    ],
   )
   const [flowNodes, setFlowNodes, onFlowNodesChange] =
     useNodesState<PixelFlowNode>(mappedFlowNodes)
@@ -206,7 +226,13 @@ export function BranchMap({
           <span className="eyebrow">BRANCH MAP</span>
           <h2>知识地图</h2>
         </div>
-        <span className="panel-count">{nodes.length} 个节点</span>
+        <div className="map-header-actions">
+          <span className="map-shortcut-hint">
+            <PixelIcon name="more" />
+            右键节点操作
+          </span>
+          <span className="panel-count">{nodes.length} 个节点</span>
+        </div>
       </header>
 
       <div className="map-legend" aria-label="节点状态图例">
@@ -222,7 +248,6 @@ export function BranchMap({
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           onNodesChange={handleNodeChanges}
-          onNodeClick={(_, node) => onSelectNode(node.id)}
           nodesConnectable={false}
           elementsSelectable
           snapToGrid
@@ -242,10 +267,11 @@ export function BranchMap({
           <MiniMap
             className="branch-minimap"
             nodeColor={(node) =>
-              toneColors[(node.data as PixelNodeData).tone]
+              node.id === currentNodeId ? '#356fc9' : '#c9d7e8'
             }
-            nodeStrokeWidth={3}
-            maskColor="rgba(249, 246, 238, 0.72)"
+            nodeStrokeWidth={0}
+            nodeBorderRadius={0}
+            maskColor="rgba(249, 246, 238, 0.64)"
             pannable
             zoomable
           />

@@ -3,11 +3,11 @@ import type {
   ContextMode,
   LearningNode,
   Message,
+  NodeAction,
   WorkspacePanel,
 } from '../types'
 import { BranchMap } from './BranchMap'
 import { ConversationPanel } from './ConversationPanel'
-import { NodeInspector } from './NodeInspector'
 import { PixelIcon } from './PixelIcon'
 
 type WorkspaceViewProps = {
@@ -21,18 +21,14 @@ type WorkspaceViewProps = {
   onBackHome: () => void
   onSelectNode: (nodeId: string) => void
   onMoveNode: (nodeId: string, position: CanvasPosition) => void
+  onNodeAction: (nodeId: string, action: NodeAction) => void
   onSendMessage: (content: string) => void
-  onCreateBranch: () => void
-  onReturnToParent: () => void
-  onMerge: () => void
-  onMarkMastered: () => void
-  onContextModeChange: (mode: ContextMode) => void
+  onContextModeChange: (nodeId: string, mode: ContextMode) => void
 }
 
 const panelTabs: { id: WorkspacePanel; label: string }[] = [
   { id: 'map', label: '地图' },
   { id: 'conversation', label: '对话' },
-  { id: 'inspector', label: '节点' },
 ]
 
 export function WorkspaceView({
@@ -46,18 +42,12 @@ export function WorkspaceView({
   onBackHome,
   onSelectNode,
   onMoveNode,
+  onNodeAction,
   onSendMessage,
-  onCreateBranch,
-  onReturnToParent,
-  onMerge,
-  onMarkMastered,
   onContextModeChange,
 }: WorkspaceViewProps) {
   const parent =
     nodes.find((node) => node.id === currentNode.parentId) ?? null
-  const childCount = nodes.filter(
-    (node) => node.parentId === currentNode.id,
-  ).length
   const currentMessages = messages.filter(
     (message) => message.nodeId === currentNode.id,
   )
@@ -104,6 +94,8 @@ export function WorkspaceView({
           currentNodeId={currentNode.id}
           onSelectNode={onSelectNode}
           onMoveNode={onMoveNode}
+          onNodeAction={onNodeAction}
+          onContextModeChange={onContextModeChange}
         />
         <ConversationPanel
           node={currentNode}
@@ -111,16 +103,6 @@ export function WorkspaceView({
           messages={currentMessages}
           isGenerating={isGenerating}
           onSendMessage={onSendMessage}
-        />
-        <NodeInspector
-          node={currentNode}
-          parent={parent}
-          childCount={childCount}
-          onCreateBranch={onCreateBranch}
-          onReturnToParent={onReturnToParent}
-          onMerge={onMerge}
-          onMarkMastered={onMarkMastered}
-          onContextModeChange={onContextModeChange}
         />
       </div>
     </main>
