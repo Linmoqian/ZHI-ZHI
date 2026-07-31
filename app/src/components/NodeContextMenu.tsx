@@ -35,6 +35,7 @@ export function NodeContextMenu({
 }: NodeContextMenuProps) {
   const isLocked = node.status === 'locked'
   const canUseParent = Boolean(node.parentId) && !isLocked
+  const canMerge = canUseParent && node.status !== 'merged'
 
   return (
     <ContextMenu.Root
@@ -73,7 +74,7 @@ export function NodeContextMenu({
               </ContextMenu.Item>
               <ContextMenu.Item
                 className="node-menu-item"
-                disabled={!canUseParent}
+                disabled={!canMerge}
                 onClick={() => onAction('merge-parent')}
               >
                 <PixelIcon name="merge" />
@@ -89,7 +90,11 @@ export function NodeContextMenu({
               </ContextMenu.Item>
               <ContextMenu.Item
                 className="node-menu-item"
-                disabled={isLocked || node.status === 'mastered'}
+                disabled={
+                  isLocked ||
+                  node.status === 'mastered' ||
+                  node.status === 'merged'
+                }
                 onClick={() => onAction('mark-mastered')}
               >
                 <PixelIcon name="check" />

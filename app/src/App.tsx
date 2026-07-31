@@ -4,7 +4,6 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from 'react'
 import './App.css'
@@ -16,6 +15,10 @@ import {
   DEFAULT_TOPIC,
 } from './data'
 import { emitDebugEvent } from './lib/debugBus'
+import {
+  learningApi,
+  LearningApiError,
+} from './services/learningApi'
 import type {
   AppView,
   CanvasPosition,
@@ -23,11 +26,8 @@ import type {
   LearningNode,
   Message,
   NodeAction,
-  NodeTone,
   WorkspacePanel,
 } from './types'
-
-const branchTones: NodeTone[] = ['purple', 'orange', 'green', 'blue']
 
 const WorkspaceView = lazy(() =>
   import('./components/WorkspaceView').then((module) => ({
@@ -38,24 +38,9 @@ const WorkspaceView = lazy(() =>
 const createLocalId = (prefix: string) =>
   `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
 
-const createMockResponse = (prompt: string, nodeTitle: string) => {
-  if (prompt.includes('例子')) {
-    return `用一个最小例子理解「${nodeTitle}」：先只保留两个对象，观察其中一个对象如何根据当前目标，从另一个对象取回有用信息。对象变多时，规则不变，只是关联数量增加了。`
-  }
-
-  if (prompt.includes('检查')) {
-    return `试着用一句自己的话回答：在「${nodeTitle}」里，输入、关联依据和最终得到的信息分别是什么？如果能清楚区分这三件事，就已经抓住了主干。`
-  }
-
-  if (prompt.includes('类比')) {
-    return `可以把「${nodeTitle}」想成在书架前带着问题找资料：问题决定你先看哪些书，书的标签帮助判断相关性，真正带走的是书里的内容。`
-  }
-
-  return `你问到了「${nodeTitle}」里的关键连接。可以先把问题拆成“它解决什么”“它如何工作”“怎样验证”三步。针对“${prompt}”，建议先从第一步确认目标，再进入结构细节。`
-}
-
 function App() {
   const [view, setView] = useState<AppView>('home')
+  const [sessionId, setSessionId] = useState<string | null>(null)
   const [topic, setTopic] = useState(DEFAULT_TOPIC)
   const [nodes, setNodes] = useState<LearningNode[]>(() =>
     createInitialNodes(DEFAULT_TOPIC),
@@ -66,22 +51,13 @@ function App() {
   const [currentNodeId, setCurrentNodeId] = useState('self-attention')
   const [currentPanel, setCurrentPanel] =
     useState<WorkspacePanel>('conversation')
+  const [isSessionStarting, setIsSessionStarting] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [toast, setToast] = useState('')
-  const responseTimerRef = useRef<number | null>(null)
 
   const currentNode = useMemo(
     () => nodes.find((node) => node.id === currentNodeId) ?? nodes[0],
     [currentNodeId, nodes],
-  )
-
-  useEffect(
-    () => () => {
-      if (responseTimerRef.current !== null) {
-        window.clearTimeout(responseTimerRef.current)
-      }
-    },
-    [],
   )
 
   useEffect(() => {
@@ -96,37 +72,68 @@ function App() {
     setToast(content)
   }, [])
 
+  const showApiError = useCallback(
+    (error: unknown) => {
+      showToast(
+        error instanceof LearningApiError
+          ? error.message
+          : '操作失败，请稍后重试',
+      )
+    },
+    [showToast],
+  )
+
   const goHome = useCallback(() => {
     setView('home')
     emitDebugEvent('view:change', { view: 'home' })
   }, [])
 
+  const startLearning = useCallback(
+    async (nextTopic: string) => {
+      if (isSessionStarting) {
+        return
+      }
+      const normalizedTopic = nextTopic.trim() || DEFAULT_TOPIC
+      setIsSessionStarting(true)
+
+      try {
+        const { session } = await learningApi.createSession(normalizedTopic)
+        const activeNode =
+          session.nodes.find((node) => node.status === 'current') ??
+          session.nodes[0]
+
+        setSessionId(session.id)
+        setTopic(session.topic)
+        setNodes(session.nodes)
+        setMessages(session.messages)
+        setCurrentNodeId(activeNode.id)
+        setCurrentPanel('conversation')
+        setIsGenerating(false)
+        setView('workspace')
+        emitDebugEvent('view:change', {
+          view: 'workspace',
+          source: 'backend-session',
+          sessionId: session.id,
+          topic: session.topic,
+        })
+      } catch (error) {
+        showApiError(error)
+      } finally {
+        setIsSessionStarting(false)
+      }
+    },
+    [isSessionStarting, showApiError],
+  )
+
   const goWorkspace = useCallback(() => {
-    setView('workspace')
-    setCurrentPanel('conversation')
-    emitDebugEvent('view:change', { view: 'workspace' })
-  }, [])
-
-  const startLearning = useCallback((nextTopic: string) => {
-    const normalizedTopic = nextTopic.trim() || DEFAULT_TOPIC
-    if (responseTimerRef.current !== null) {
-      window.clearTimeout(responseTimerRef.current)
-      responseTimerRef.current = null
+    if (!sessionId) {
+      void startLearning(topic)
+      return
     }
-
-    setTopic(normalizedTopic)
-    setNodes(createInitialNodes(normalizedTopic))
-    setMessages(createInitialMessages(normalizedTopic))
-    setCurrentNodeId('self-attention')
-    setCurrentPanel('conversation')
-    setIsGenerating(false)
     setView('workspace')
-    emitDebugEvent('view:change', {
-      view: 'workspace',
-      source: 'start-learning',
-      topic: normalizedTopic,
-    })
-  }, [])
+    setCurrentPanel('conversation')
+    emitDebugEvent('view:change', { view: 'workspace', sessionId })
+  }, [sessionId, startLearning, topic])
 
   const selectNode = useCallback((nodeId: string) => {
     setNodes((currentNodes) =>
@@ -157,212 +164,243 @@ function App() {
   )
 
   const sendMessage = useCallback(
-    (content: string) => {
+    async (content: string) => {
       const normalizedContent = content.trim()
-      if (!normalizedContent || isGenerating || !currentNode) {
+      if (
+        !normalizedContent ||
+        isGenerating ||
+        !currentNode ||
+        !sessionId
+      ) {
         return
       }
 
       const targetNodeId = currentNode.id
-      const targetNodeTitle = currentNode.title
-      const userMessage: Message = {
-        id: createLocalId('message-user'),
+      const optimisticId = createLocalId('message-pending')
+      const optimisticMessage: Message = {
+        id: optimisticId,
         nodeId: targetNodeId,
         role: 'user',
         content: normalizedContent,
         createdAt: '刚刚',
       }
 
-      setMessages((currentMessages) => [...currentMessages, userMessage])
+      setMessages((currentMessages) => [
+        ...currentMessages,
+        optimisticMessage,
+      ])
       setIsGenerating(true)
       emitDebugEvent('message:send', {
+        sessionId,
         nodeId: targetNodeId,
         contentLength: normalizedContent.length,
       })
 
-      responseTimerRef.current = window.setTimeout(() => {
-        const assistantMessage: Message = {
-          id: createLocalId('message-assistant'),
-          nodeId: targetNodeId,
-          role: 'assistant',
-          content: createMockResponse(normalizedContent, targetNodeTitle),
-          createdAt: '刚刚',
-        }
+      try {
+        const result = await learningApi.sendMessage(
+          sessionId,
+          targetNodeId,
+          normalizedContent,
+        )
         setMessages((currentMessages) => [
-          ...currentMessages,
-          assistantMessage,
+          ...currentMessages.filter(
+            (message) => message.id !== optimisticId,
+          ),
+          result.userMessage,
+          result.assistantMessage,
         ])
+        emitDebugEvent('context:compiled', {
+          nodeId: targetNodeId,
+          ...result.contextTrace,
+        })
+      } catch (error) {
+        setMessages((currentMessages) =>
+          currentMessages.filter(
+            (message) => message.id !== optimisticId,
+          ),
+        )
+        showApiError(error)
+      } finally {
         setIsGenerating(false)
-        responseTimerRef.current = null
-      }, 760)
+      }
     },
-    [currentNode, isGenerating],
+    [currentNode, isGenerating, sessionId, showApiError],
   )
 
-  const createBranch = useCallback((nodeId: string) => {
-    const sourceNode = nodes.find((node) => node.id === nodeId)
-    if (!sourceNode || sourceNode.status === 'locked') {
-      return
-    }
-
-    const siblings = nodes.filter(
-      (node) => node.parentId === sourceNode.id,
-    ).length
-    const branchNumber = siblings + 1
-    const branchId = createLocalId('branch')
-    const horizontalDirection = siblings % 2 === 0 ? -1 : 1
-    const tone = branchTones[siblings % branchTones.length]
-    const nextNode: LearningNode = {
-      id: branchId,
-      parentId: sourceNode.id,
-      title: `新概念分支 ${branchNumber}`,
-      summary: `从“${sourceNode.title}”独立探索的新问题。`,
-      status: 'current',
-      tone,
-      position: {
-        x: sourceNode.position.x + horizontalDirection * (136 + siblings * 20),
-        y: sourceNode.position.y + 172,
-      },
-      contextMode: 'inherit',
-    }
-
-    setNodes((currentNodes) => [
-      ...currentNodes.map((node) =>
-        node.status === 'current'
-          ? { ...node, status: 'exploring' as const }
-          : node,
-      ),
-      nextNode,
-    ])
-    setMessages((currentMessages) => [
-      ...currentMessages,
-      {
-        id: createLocalId('message-branch'),
-        nodeId: branchId,
-        role: 'assistant',
-        content:
-          '新分支已经创建。这里的追问会保持独立，探索完成后可以把结论合并回父节点。',
-        createdAt: '刚刚',
-      },
-    ])
-    setCurrentNodeId(branchId)
-    setCurrentPanel('conversation')
-    showToast('新概念分支已创建')
-    emitDebugEvent('node:create', {
-      nodeId: branchId,
-      parentId: sourceNode.id,
-    })
-  }, [nodes, showToast])
-
-  const returnToParent = useCallback((nodeId: string) => {
-    const sourceNode = nodes.find((node) => node.id === nodeId)
-    if (!sourceNode?.parentId) {
-      return
-    }
-    const parentId = sourceNode.parentId
-    setNodes((currentNodes) =>
-      currentNodes.map((node) => {
-        if (node.id === sourceNode.id && node.status === 'current') {
-          return { ...node, status: 'exploring' }
-        }
-        if (node.id === parentId && node.status === 'exploring') {
-          return { ...node, status: 'current' }
-        }
-        return node
-      }),
-    )
-    setCurrentNodeId(parentId)
-    setCurrentPanel('conversation')
-    showToast('已返回父节点')
-    emitDebugEvent('node:select', { nodeId: parentId, source: 'parent' })
-  }, [nodes, showToast])
-
-  const mergeToParent = useCallback((nodeId: string) => {
-    const sourceNode = nodes.find((node) => node.id === nodeId)
-    if (!sourceNode?.parentId || sourceNode.status === 'locked') {
-      return
-    }
-
-    const parentId = sourceNode.parentId
-    const childTitle = sourceNode.title
-    const childSummary = sourceNode.summary
-    setNodes((currentNodes) =>
-      currentNodes.map((node) => {
-        if (node.id === sourceNode.id) {
-          return { ...node, status: 'merged' }
-        }
-        if (node.id === parentId && node.status === 'exploring') {
-          return { ...node, status: 'current' }
-        }
-        return node
-      }),
-    )
-    setMessages((currentMessages) => [
-      ...currentMessages,
-      {
-        id: createLocalId('message-merge'),
-        nodeId: parentId,
-        role: 'assistant',
-        content: `已合并来自“${childTitle}”的结论：${childSummary}`,
-        createdAt: '刚刚',
-      },
-    ])
-    setCurrentNodeId(parentId)
-    setCurrentPanel('conversation')
-    showToast('分支结论已合并到父节点')
-    emitDebugEvent('node:merge', {
-      nodeId: sourceNode.id,
-      parentId,
-    })
-  }, [nodes, showToast])
-
-  const markMastered = useCallback((nodeId: string) => {
-    const sourceNode = nodes.find((node) => node.id === nodeId)
-    if (!sourceNode || sourceNode.status === 'locked') {
-      return
-    }
-    setNodes((currentNodes) =>
-      currentNodes.map((node) =>
-        node.id === sourceNode.id ? { ...node, status: 'mastered' } : node,
-      ),
-    )
-    showToast('已标记为掌握')
-    emitDebugEvent('node:update', {
-      nodeId: sourceNode.id,
-      status: 'mastered',
-    })
-  }, [nodes, showToast])
-
-  const changeContextMode = useCallback(
-    (nodeId: string, mode: ContextMode) => {
-      const sourceNode = nodes.find((node) => node.id === nodeId)
-      if (!sourceNode) {
+  const createBranch = useCallback(
+    async (nodeId: string) => {
+      if (!sessionId) {
+        showToast('请先创建学习会话')
         return
       }
+
+      try {
+        const result = await learningApi.createBranch(
+          sessionId,
+          nodeId,
+          'isolated',
+        )
+        setNodes((currentNodes) => [
+          ...currentNodes.map((node) => {
+            if (node.id === result.sourceNode.id) {
+              return result.sourceNode
+            }
+            return node.status === 'current'
+              ? { ...node, status: 'exploring' as const }
+              : node
+          }),
+          result.node,
+        ])
+        setMessages((currentMessages) => [
+          ...currentMessages,
+          result.message,
+        ])
+        setCurrentNodeId(result.node.id)
+        setCurrentPanel('conversation')
+        showToast('隔离分支已创建')
+        emitDebugEvent('node:create', {
+          nodeId: result.node.id,
+          parentId: result.node.parentId,
+          contextMode: result.node.contextMode,
+        })
+      } catch (error) {
+        showApiError(error)
+      }
+    },
+    [sessionId, showApiError, showToast],
+  )
+
+  const returnToParent = useCallback(
+    (nodeId: string) => {
+      const sourceNode = nodes.find((node) => node.id === nodeId)
+      if (!sourceNode?.parentId) {
+        return
+      }
+      const parentId = sourceNode.parentId
+
       setNodes((currentNodes) =>
-        currentNodes.map((node) =>
-          node.id === sourceNode.id ? { ...node, contextMode: mode } : node,
-        ),
+        currentNodes.map((node) => {
+          if (node.id === sourceNode.id && node.status === 'current') {
+            return { ...node, status: 'exploring' }
+          }
+          if (node.id === parentId && node.status === 'exploring') {
+            return { ...node, status: 'current' }
+          }
+          return node
+        }),
       )
-      showToast(mode === 'inherit' ? '已继承父节点上下文' : '已隔离同级分支')
-      emitDebugEvent('node:update', {
-        nodeId: sourceNode.id,
-        contextMode: mode,
+      setCurrentNodeId(parentId)
+      setCurrentPanel('conversation')
+      showToast('已返回父节点')
+      emitDebugEvent('node:select', {
+        nodeId: parentId,
+        source: 'parent',
       })
     },
     [nodes, showToast],
   )
 
+  const mergeToParent = useCallback(
+    async (nodeId: string) => {
+      if (!sessionId) {
+        showToast('请先创建学习会话')
+        return
+      }
+
+      try {
+        const result = await learningApi.mergeBranch(sessionId, nodeId)
+        setNodes((currentNodes) =>
+          currentNodes.map((node) => {
+            if (node.id === result.sourceNode.id) {
+              return result.sourceNode
+            }
+            if (node.id === result.parentNode.id) {
+              return result.parentNode
+            }
+            return node
+          }),
+        )
+        setMessages((currentMessages) => [
+          ...currentMessages,
+          result.message,
+        ])
+        setCurrentNodeId(result.parentNode.id)
+        setCurrentPanel('conversation')
+        showToast('分支结论已安全合并')
+        emitDebugEvent('node:merge', {
+          nodeId: result.sourceNode.id,
+          parentId: result.parentNode.id,
+        })
+      } catch (error) {
+        showApiError(error)
+      }
+    },
+    [sessionId, showApiError, showToast],
+  )
+
+  const markMastered = useCallback(
+    async (nodeId: string) => {
+      if (!sessionId) {
+        showToast('请先创建学习会话')
+        return
+      }
+
+      try {
+        const result = await learningApi.updateNode(sessionId, nodeId, {
+          status: 'mastered',
+        })
+        setNodes((currentNodes) =>
+          replaceNode(currentNodes, result.node),
+        )
+        showToast('已标记为掌握')
+        emitDebugEvent('node:update', {
+          nodeId,
+          status: 'mastered',
+        })
+      } catch (error) {
+        showApiError(error)
+      }
+    },
+    [sessionId, showApiError, showToast],
+  )
+
+  const changeContextMode = useCallback(
+    async (nodeId: string, mode: ContextMode) => {
+      if (!sessionId) {
+        showToast('请先创建学习会话')
+        return
+      }
+
+      try {
+        const result = await learningApi.updateNode(sessionId, nodeId, {
+          contextMode: mode,
+        })
+        setNodes((currentNodes) =>
+          replaceNode(currentNodes, result.node),
+        )
+        showToast(
+          mode === 'inherit'
+            ? '已继承创建时的父节点快照'
+            : '已隔离父节点与同级分支',
+        )
+        emitDebugEvent('node:update', { nodeId, contextMode: mode })
+      } catch (error) {
+        showApiError(error)
+      }
+    },
+    [sessionId, showApiError, showToast],
+  )
+
   const handleNodeAction = useCallback(
     (nodeId: string, action: NodeAction) => {
       if (action === 'create-branch') {
-        createBranch(nodeId)
+        void createBranch(nodeId)
       } else if (action === 'merge-parent') {
-        mergeToParent(nodeId)
+        void mergeToParent(nodeId)
       } else if (action === 'return-parent') {
         returnToParent(nodeId)
       } else {
-        markMastered(nodeId)
+        void markMastered(nodeId)
       }
     },
     [createBranch, markMastered, mergeToParent, returnToParent],
@@ -377,7 +415,12 @@ function App() {
         onShowSoon={(feature) => showToast(`${feature}将在后续版本开放`)}
       />
       {view === 'home' ? (
-        <HomeView onStartLearning={startLearning} />
+        <HomeView
+          isStarting={isSessionStarting}
+          onStartLearning={(nextTopic) => {
+            void startLearning(nextTopic)
+          }}
+        />
       ) : (
         <Suspense
           fallback={
@@ -399,8 +442,12 @@ function App() {
             onSelectNode={selectNode}
             onMoveNode={moveNode}
             onNodeAction={handleNodeAction}
-            onSendMessage={sendMessage}
-            onContextModeChange={changeContextMode}
+            onSendMessage={(content) => {
+              void sendMessage(content)
+            }}
+            onContextModeChange={(nodeId, mode) => {
+              void changeContextMode(nodeId, mode)
+            }}
           />
         </Suspense>
       )}
@@ -413,6 +460,12 @@ function App() {
         {toast}
       </div>
     </div>
+  )
+}
+
+function replaceNode(nodes: LearningNode[], updatedNode: LearningNode) {
+  return nodes.map((node) =>
+    node.id === updatedNode.id ? updatedNode : node,
   )
 }
 

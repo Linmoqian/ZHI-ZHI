@@ -5,6 +5,7 @@ export type DebugEventName =
   | 'node:update'
   | 'node:merge'
   | 'message:send'
+  | 'context:compiled'
 
 export function emitDebugEvent(
   name: DebugEventName,

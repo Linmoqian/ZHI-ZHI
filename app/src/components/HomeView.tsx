@@ -5,6 +5,7 @@ import { PixelIcon } from './PixelIcon'
 
 type HomeViewProps = {
   onStartLearning: (topic: string) => void
+  isStarting: boolean
 }
 
 const toneSteps: NodeTone[] = [
@@ -90,7 +91,10 @@ function RecentProjectCard({
   )
 }
 
-export function HomeView({ onStartLearning }: HomeViewProps) {
+export function HomeView({
+  onStartLearning,
+  isStarting,
+}: HomeViewProps) {
   const [topic, setTopic] = useState('')
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -116,7 +120,11 @@ export function HomeView({ onStartLearning }: HomeViewProps) {
           <TopicIllustration />
         </header>
 
-        <form className="learning-prompt pixel-panel" onSubmit={handleSubmit}>
+        <form
+          className="learning-prompt pixel-panel"
+          aria-busy={isStarting}
+          onSubmit={handleSubmit}
+        >
           <span className="learning-prompt__icon">
             <PixelIcon name="plus" />
           </span>
@@ -128,12 +136,13 @@ export function HomeView({ onStartLearning }: HomeViewProps) {
             onChange={(event) => setTopic(event.target.value)}
             placeholder="输入一个问题或概念…"
             autoComplete="off"
+            disabled={isStarting}
           />
           <button
             className="learning-prompt__submit pixel-press"
             type="submit"
-            aria-label="开始学习"
-            disabled={!topic.trim()}
+            aria-label={isStarting ? '正在创建学习空间' : '开始学习'}
+            disabled={!topic.trim() || isStarting}
           >
             <PixelIcon name="arrow" />
           </button>
