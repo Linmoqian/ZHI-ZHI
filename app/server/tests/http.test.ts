@@ -37,6 +37,22 @@ test('HTTP 接口创建会话并拒绝空消息', async () => {
         message: '消息内容不能为空',
       },
     })
+
+    const invalidModeResponse = await fetch(
+      `${baseUrl}/api/sessions/${sessionResponse.body.session.id}/nodes/self-attention/branches`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contextMode: 'leak-siblings' }),
+      },
+    )
+    assert.equal(invalidModeResponse.status, 400)
+    assert.deepEqual(await invalidModeResponse.json(), {
+      error: {
+        code: 'INVALID_CONTEXT_MODE',
+        message: '上下文模式无效',
+      },
+    })
   })
 })
 

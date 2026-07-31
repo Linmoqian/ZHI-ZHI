@@ -109,6 +109,13 @@ export class LearningStore {
     if (sourceNode.status === 'locked') {
       throw new ApiError(409, 'NODE_LOCKED', '待解锁节点不能创建分支')
     }
+    if (
+      input.contextMode !== undefined &&
+      input.contextMode !== 'inherit' &&
+      input.contextMode !== 'isolated'
+    ) {
+      throw new ApiError(400, 'INVALID_CONTEXT_MODE', '上下文模式无效')
+    }
 
     const siblings = [...session.nodes.values()].filter(
       (node) => node.parentId === sourceNode.id,
@@ -270,6 +277,9 @@ export class LearningStore {
     }
     if (sourceNode.status === 'locked') {
       throw new ApiError(409, 'NODE_LOCKED', '待解锁节点不能合并')
+    }
+    if (sourceNode.status === 'merged') {
+      throw new ApiError(409, 'BRANCH_ALREADY_MERGED', '分支已经合并')
     }
 
     const parentNode = this.requireNode(session, sourceNode.parentId)
