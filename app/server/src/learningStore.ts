@@ -31,6 +31,10 @@ import {
   type ModelGateway,
 } from './modelGateway.ts'
 import type { SessionPersistor } from './journal.ts'
+import {
+  buildKnowledgeMap,
+  type KnowledgeMap,
+} from './knowledgeMap.ts'
 import { createSeedNodes } from './seed.ts'
 
 const branchTones: NodeTone[] = ['purple', 'orange', 'green', 'blue']
@@ -41,6 +45,33 @@ const validStatuses = new Set<NodeStatus>([
   'merged',
   'locked',
 ])
+
+// 合法状态转移表：键为当前状态，值为允许直接切换到的一组状态。
+// 用于约束非法的状态跳转，保证学习状态机语义一致。
+const statusTransitions: Record<NodeStatus, ReadonlySet<NodeStatus>> = {
+  current: new Set(['exploring', 'mastered', 'merged']),
+  exploring: new Set(['current', 'mastered', 'merged']),
+  mastered: new Set(['exploring', 'merged']),
+  merged: new Set(),
+  locked: new Set(['exploring']),
+}
+
+function assertTransition(
+  current: NodeStatus,
+  next: NodeStatus,
+  nodeLabel: string,
+) {
+  if (current === next) {
+    return
+  }
+  if (!statusTransitions[current].has(next)) {
+    throw new ApiError(
+      409,
+      'INVALID_STATUS_TRANSITION',
+      `节点“${nodeLabel}”不允许从“${current}”切换到“${next}”`,
+    )
+  }
+}
 
 export type CreateBranchInput = {
   title?: string
@@ -209,6 +240,9 @@ export class LearningStore {
     if (input.status && !validStatuses.has(input.status)) {
       throw new ApiError(400, 'INVALID_STATUS', '节点状态无效')
     }
+    if (input.status) {
+      assertTransition(node.status, input.status, node.title)
+    }
     if (
       input.contextMode &&
       input.contextMode !== 'inherit' &&
@@ -240,6 +274,29 @@ export class LearningStore {
     }
 
     return { node: { ...updatedNode } }
+  }
+
+  /** 将待解锁节点解锁为探索状态，并返回更新后的节点。 */
+  unlockNode(sessionId: string, nodeId: string): UpdateNodeResponse {
+    const session = this.requireSession(sessionId)
+    const node = this.requireNode(session, nodeId)
+
+    if (node.status !== 'locked') {
+      throw new ApiError(409, 'NODE_NOT_LOCKED', '只有待解锁节点才能解锁')
+    }
+
+    const updatedNode: LearningNode = {
+      ...node,
+      status: 'exploring',
+    }
+    session.nodes.set(nodeId, updatedNode)
+    return { node: { ...updatedNode } }
+  }
+
+  /** 返回指定会话的概念知识地图。 */
+  getKnowledgeMap(sessionId: string): KnowledgeMap {
+    const session = this.requireSession(sessionId)
+    return buildKnowledgeMap(this.toSnapshot(session))
   }
 
   async sendMessage(
@@ -314,6 +371,7 @@ export class LearningStore {
     if (sourceNode.status === 'merged') {
       throw new ApiError(409, 'BRANCH_ALREADY_MERGED', '分支已经合并')
     }
+    assertTransition(sourceNode.status, 'merged', sourceNode.title)
 
     const parentNode = this.requireNode(session, sourceNode.parentId)
     const localMessageCount = [...session.messages.values()].filter(

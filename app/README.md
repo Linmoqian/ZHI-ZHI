@@ -54,7 +54,9 @@ npm run server:test
 | `POST` | `/api/sessions/:id/nodes/:nodeId/messages` | 在分支中发送消息 |
 | `PATCH` | `/api/sessions/:id/nodes/:nodeId` | 更新状态、布局或上下文模式 |
 | `POST` | `/api/sessions/:id/nodes/:nodeId/merge` | 将分支结论合并到父节点 |
+| `POST` | `/api/sessions/:id/nodes/:nodeId/unlock` | 解锁待解锁节点 |
 | `GET` | `/api/sessions/:id/nodes/:nodeId/context` | 检查实际编译的上下文 |
+| `GET` | `/api/sessions/:id/knowledge-map` | 获取会话的概念知识地图 |
 
 ## 上下文隔离规则
 

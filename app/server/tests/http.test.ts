@@ -6,6 +6,7 @@ import type {
   CreateBranchResponse,
   CreateSessionResponse,
   SendMessageResponse,
+  UpdateNodeResponse,
 } from '../../shared/contracts.ts'
 import { createApiHandler } from '../src/http.ts'
 import { LearningStore } from '../src/learningStore.ts'
@@ -95,6 +96,38 @@ test('HTTP 上下文接口不泄漏同级分支消息', async () => {
           !message.content.includes('HTTP A 分支私有消息 141421'),
       ),
     )
+  })
+})
+
+test('HTTP 接口支持解锁与知识地图', async () => {
+  await withApi(async (baseUrl) => {
+    const sessionResult = await postJson<CreateSessionResponse>(
+      `${baseUrl}/api/sessions`,
+      { topic: 'HTTP 阶段四验证' },
+    )
+    const sessionId = sessionResult.body.session.id
+    const locked = sessionResult.body.session.nodes.find(
+      (node) => node.status === 'locked',
+    )
+    assert.ok(locked)
+
+    const unlockResponse = await fetch(
+      `${baseUrl}/api/sessions/${sessionId}/nodes/${locked.id}/unlock`,
+      { method: 'POST' },
+    )
+    assert.equal(unlockResponse.status, 200)
+    const unlockBody = (await unlockResponse.json()) as UpdateNodeResponse
+    assert.equal(unlockBody.node.status, 'exploring')
+
+    const mapResponse = await fetch(
+      `${baseUrl}/api/sessions/${sessionId}/knowledge-map`,
+    )
+    assert.equal(mapResponse.status, 200)
+    const mapBody = (await mapResponse.json()) as {
+      knowledgeMap: { concepts: unknown[]; links: unknown[] }
+    }
+    assert.equal(mapBody.knowledgeMap.concepts.length, 8)
+    assert.ok(mapBody.knowledgeMap.links.length > 0)
   })
 })
 

@@ -160,6 +160,30 @@ export function createApiHandler(store = new LearningStore()) {
         return
       }
 
+      if (
+        isNodeRoute &&
+        request.method === 'POST' &&
+        segments[5] === 'unlock' &&
+        segments.length === 6
+      ) {
+        const unlockResult = store.unlockNode(segments[2], segments[4])
+        await store.persistSession(segments[2])
+        sendJson(response, 200, unlockResult)
+        return
+      }
+
+      if (
+        isSessionRoute &&
+        request.method === 'GET' &&
+        segments.length === 4 &&
+        segments[3] === 'knowledge-map'
+      ) {
+        sendJson(response, 200, {
+          knowledgeMap: store.getKnowledgeMap(segments[2]),
+        })
+        return
+      }
+
       throw new ApiError(404, 'ROUTE_NOT_FOUND', '接口不存在')
     } catch (error) {
       sendError(response, error)

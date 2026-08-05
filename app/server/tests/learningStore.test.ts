@@ -5,6 +5,7 @@ import path from 'node:path'
 import test from 'node:test'
 import { ContentStore } from '../src/contentStore.ts'
 import { createFileSessionPersistor } from '../src/journal.ts'
+import { buildKnowledgeMap } from '../src/knowledgeMap.ts'
 import type { ModelGateway } from '../src/modelGateway.ts'
 import { LearningStore } from '../src/learningStore.ts'
 import { buildSummaryBlock, SUMMARY_BLOCK_SIZE } from '../src/summary.ts'
@@ -216,4 +217,73 @@ test('会话快照持久化后恢复保留 DAG 与隔离语义', async () => {
   } finally {
     await rm(dataDir, { recursive: true, force: true })
   }
+})
+
+test('待解锁节点可以通过解锁进入探索状态', () => {
+  const store = createStore()
+  const session = store.createSession('解锁验证')
+  const locked = store.getSession(session.id).nodes.find(
+    (node) => node.status === 'locked',
+  )
+  assert.ok(locked, 'seed 中应存在 locked 节点')
+
+  const result = store.unlockNode(session.id, locked.id)
+  assert.equal(result.node.status, 'exploring')
+  assert.equal(
+    store.getSession(session.id).nodes.find((node) => node.id === locked.id)
+      ?.status,
+    'exploring',
+  )
+})
+
+test('解锁非锁定节点会拒绝', () => {
+  const store = createStore()
+  const session = store.createSession('解锁拒绝验证')
+  const current = store.getSession(session.id).nodes.find(
+    (node) => node.status === 'current',
+  )
+  assert.ok(current)
+  assert.throws(
+    () => store.unlockNode(session.id, current.id),
+    { code: 'NODE_NOT_LOCKED' },
+  )
+})
+
+test('状态机拒绝非法的状态跳转', () => {
+  const store = createStore()
+  const session = store.createSession('状态机验证')
+  const current = store.getSession(session.id).nodes.find(
+    (node) => node.status === 'current',
+  )
+  assert.ok(current)
+  // current 不能直接跳到 locked（锁定只有解锁路径进入）
+  assert.throws(
+    () => store.updateNode(session.id, current.id, { status: 'locked' }),
+    { code: 'INVALID_STATUS_TRANSITION' },
+  )
+  // current -> mastered 合法
+  const result = store.updateNode(session.id, current.id, {
+    status: 'mastered',
+  })
+  assert.equal(result.node.status, 'mastered')
+})
+
+test('知识地图由节点构成概念与主线连线', () => {
+  const store = createStore()
+  const session = store.createSession('知识地图验证')
+  const snapshot = store.getSession(session.id)
+  const knowledgeMap = buildKnowledgeMap(snapshot)
+
+  assert.equal(knowledgeMap.concepts.length, snapshot.nodes.length)
+  // 根节点与至少一个子节点之间应存在父->子连线
+  const rootConcept = knowledgeMap.concepts.find((c) =>
+    c.sourceNodeIds.includes('root'),
+  )
+  assert.ok(rootConcept)
+  assert.ok(
+    knowledgeMap.links.some((link) => link.source === rootConcept.id),
+  )
+  assert.ok(
+    snapshot.nodes.length > 0 && knowledgeMap.concepts.length > 0,
+  )
 })
