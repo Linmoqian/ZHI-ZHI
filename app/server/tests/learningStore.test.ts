@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { ContentStore } from '../src/contentStore.ts'
-import { createFileSessionPersistor } from '../src/journal.ts'
+import {
+  createFileSessionPersistor,
+  createJournaledSessionPersistor,
+} from '../src/journal.ts'
 import { buildKnowledgeMap } from '../src/knowledgeMap.ts'
 import type { ModelGateway } from '../src/modelGateway.ts'
 import { LearningStore } from '../src/learningStore.ts'
@@ -286,4 +289,119 @@ test('知识地图由节点构成概念与主线连线', () => {
   assert.ok(
     snapshot.nodes.length > 0 && knowledgeMap.concepts.length > 0,
   )
+})
+
+test('追加日志在小阈值下自动压缩为快照', async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'zhizhi-journal-'))
+  const gateway = createFakeGateway()
+  try {
+    const persistor = createJournaledSessionPersistor(dataDir, {
+      checkpointEventThreshold: 3, // 3 条事件就触发一次快照压缩
+      checkpointIdleMs: 10_000,
+    })
+    const store = new LearningStore({ modelGateway: gateway, persistor })
+    const session = store.createSession('日志压缩验证')
+
+    for (let i = 0; i < 6; i += 1) {
+      await store.sendMessage(
+        session.id,
+        'self-attention',
+        `压缩验证 ${i}`,
+      )
+      await store.persistSession(session.id)
+    }
+
+    // 低阈值下事件会反复触发压缩，日志不应无限增长（应存在且至少一次被清空）
+    const files = await readdir(dataDir)
+    const journalFiles = files.filter((f) => f.endsWith('.journal.jsonl'))
+    const checkpointFiles = files.filter((f) => f.endsWith('.session.json'))
+    assert.ok(journalFiles.length >= 1)
+    assert.ok(checkpointFiles.length >= 1)
+
+    // 压缩后恢复应还原全部消息
+    const restored = new LearningStore({ modelGateway: gateway, persistor })
+    const ids = await persistor.listSessionIds()
+    const dump = await persistor.load(ids[0])
+    assert.ok(dump)
+    restored.restoreSession(dump)
+    const context = restored.getCompiledContext(session.id, 'self-attention')
+    assert.ok(context.messages.some((m) => m.content.includes('压缩验证 5')))
+    assert.ok(context.messages.some((m) => m.content.includes('压缩验证 0')))
+  } finally {
+    await rm(dataDir, { recursive: true, force: true })
+  }
+})
+
+test('追加日志在未触发压缩时会话通过日志重放完整恢复', async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'zhizhi-replay-'))
+  const gateway = createFakeGateway()
+  try {
+    const persistor = createJournaledSessionPersistor(dataDir, {
+      checkpointEventThreshold: 1000, // 高频阈值，不触发压缩
+      checkpointIdleMs: 3_600_000,
+    })
+    const store = new LearningStore({ modelGateway: gateway, persistor })
+    const session = store.createSession('日志重放验证')
+    await store.persistSession(session.id)
+
+    await store.sendMessage(session.id, 'self-attention', '重放消息一 778899')
+    await store.sendMessage(
+      session.id,
+      'self-attention',
+      '重放消息二 776655',
+    )
+    store.createBranch(session.id, 'self-attention', {
+      title: '重放分支',
+    })
+    await store.persistSession(session.id)
+
+    // 日志文件应有内容（未压缩）
+    const files = await readdir(dataDir)
+    const journalFiles = files.filter((f) => f.endsWith('.journal.jsonl'))
+    assert.ok(journalFiles.length >= 1)
+
+    const restored = new LearningStore({ modelGateway: gateway, persistor })
+    const ids = await persistor.listSessionIds()
+    const dump = await persistor.load(ids[0])
+    assert.ok(dump)
+    restored.restoreSession(dump)
+
+    // 重放后消息与分支都应存在
+    const context = restored.getCompiledContext(session.id, 'self-attention')
+    assert.ok(context.messages.some((m) => m.content.includes('重放消息二 776655')))
+    assert.ok(
+      restored
+        .getSession(session.id)
+        .nodes.some((n) => n.title === '重放分支'),
+    )
+  } finally {
+    await rm(dataDir, { recursive: true, force: true })
+  }
+})
+
+test('兼容旧的纯快照 .session.json 格式', async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'zhizhi-old-'))
+  const gateway = createFakeGateway()
+  try {
+    const oldStore = new LearningStore({
+      modelGateway: gateway,
+      persistor: createFileSessionPersistor(dataDir),
+    })
+    const session = oldStore.createSession('旧格式兼容验证')
+    await oldStore.sendMessage(session.id, 'self-attention', '旧快照消息 334455')
+    await oldStore.persistSession(session.id)
+
+    // 用 journaled 持久化器读取旧快照
+    const journaled = createJournaledSessionPersistor(dataDir)
+    const ids = await journaled.listSessionIds()
+    assert.equal(ids.length, 1)
+    const dump = await journaled.load(ids[0])
+    assert.ok(dump)
+    const restored = new LearningStore({ modelGateway: gateway, persistor: journaled })
+    restored.restoreSession(dump)
+    const context = restored.getCompiledContext(session.id, 'self-attention')
+    assert.ok(context.messages.some((m) => m.content.includes('旧快照消息 334455')))
+  } finally {
+    await rm(dataDir, { recursive: true, force: true })
+  }
 })

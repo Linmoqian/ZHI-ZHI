@@ -30,7 +30,7 @@ import {
   resolveModelFromEnv,
   type ModelGateway,
 } from './modelGateway.ts'
-import type { SessionPersistor } from './journal.ts'
+import type { SessionPersistor, JournalEvent } from './journal.ts'
 import {
   buildKnowledgeMap,
   type KnowledgeMap,
@@ -96,6 +96,8 @@ export class LearningStore {
   readonly contentStore = new ContentStore()
   private readonly modelGateway: ModelGateway
   private readonly persistor?: SessionPersistor
+  /** 每个会话尚未持久化的变更事件队列。 */
+  private readonly pendingEvents = new Map<string, JournalEvent[]>()
 
   constructor(options: LearningStoreOptions = {}) {
     this.modelGateway = options.modelGateway ?? createDefaultGateway()
@@ -221,6 +223,20 @@ export class LearningStore {
         : '新分支已经创建。这里会继承创建时的父节点上下文，但不会读取同级分支的对话。',
     )
 
+    this.recordEvents(sessionId, [
+      {
+        type: 'branch_created',
+        sessionId,
+        node,
+        branch,
+        initialMessage: session.messages.get(message.id)!, 
+        initialContent: this.contentStore.get(
+          session.messages.get(message.id)!.contentHash,
+        ),
+        createdAt: session.createdAt,
+      },
+    ])
+
     return {
       node: { ...node },
       sourceNode: { ...this.requireNode(session, sourceNodeId) },
@@ -273,6 +289,15 @@ export class LearningStore {
       })
     }
 
+    this.recordEvents(sessionId, [
+      {
+        type: 'node_updated',
+        sessionId,
+        node: updatedNode,
+        branch: session.branches.get(nodeId) ?? branch,
+      },
+    ])
+
     return { node: { ...updatedNode } }
   }
 
@@ -290,6 +315,9 @@ export class LearningStore {
       status: 'exploring',
     }
     session.nodes.set(nodeId, updatedNode)
+    this.recordEvents(sessionId, [
+      { type: 'node_unlocked', sessionId, node: updatedNode },
+    ])
     return { node: { ...updatedNode } }
   }
 
@@ -348,6 +376,27 @@ export class LearningStore {
       reply,
     )
 
+    const storedUser = session.messages.get(userMessage.id)!
+    const storedAssistant = session.messages.get(assistantMessage.id)!
+    this.recordEvents(sessionId, [
+      {
+        type: 'message_appended',
+        sessionId,
+        message: storedUser,
+        content: normalizedContent,
+        createdAt: session.createdAt,
+        branchHeadMessageId: userMessage.id,
+      },
+      {
+        type: 'message_appended',
+        sessionId,
+        message: storedAssistant,
+        content: reply,
+        createdAt: session.createdAt,
+        branchHeadMessageId: assistantMessage.id,
+      },
+    ])
+
     return {
       userMessage,
       assistantMessage,
@@ -396,6 +445,18 @@ export class LearningStore {
     session.nodes.set(updatedSource.id, updatedSource)
     session.nodes.set(updatedParent.id, updatedParent)
 
+    this.recordEvents(sessionId, [
+      {
+        type: 'branch_merged',
+        sessionId,
+        sourceNode: updatedSource,
+        parentNode: updatedParent,
+        message: session.messages.get(message.id)!,
+        content: this.contentStore.get(session.messages.get(message.id)!.contentHash),
+        createdAt: session.createdAt,
+      },
+    ])
+
     return {
       sourceNode: { ...updatedSource },
       parentNode: { ...updatedParent },
@@ -413,14 +474,27 @@ export class LearningStore {
   }
 
   /**
-   * 将指定会话的最新完整快照写入持久层；未配置持久化器时为空操作。
-   * 供外部在每次 mutation 后调用，实现进程重启后的恢复。
+   * 将指定会话累积的变更事件写入持久层；达到快照阈值时自动压缩为全量快照。
+   * 未配置持久化器时为空操作。供外部在每次 mutation 后调用。
    */
   async persistSession(sessionId: string): Promise<void> {
     if (!this.persistor) {
+      this.pendingEvents.delete(sessionId)
       return
     }
-    await this.persistor.persist(this.serializeSession(sessionId))
+    const events = this.pendingEvents.get(sessionId) ?? []
+    this.pendingEvents.delete(sessionId)
+    await this.persistor.append(
+      sessionId,
+      events,
+      () => this.serializeSession(sessionId),
+    )
+  }
+
+  /** 记录一次变更事件，供后续 persistSession 时批量写入。 */
+  private recordEvents(sessionId: string, events: JournalEvent[]) {
+    const existing = this.pendingEvents.get(sessionId) ?? []
+    this.pendingEvents.set(sessionId, existing.concat(events))
   }
 
   /** 将指定会话序列化为可持久化的完整状态。 */

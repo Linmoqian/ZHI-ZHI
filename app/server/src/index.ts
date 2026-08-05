@@ -1,7 +1,7 @@
 import { createServer } from 'node:http'
 import { createApiHandler } from './http.ts'
 import { LearningStore } from './learningStore.ts'
-import { createFileSessionPersistor } from './journal.ts'
+import { createJournaledSessionPersistor } from './journal.ts'
 import { createOllamaGateway, resolveModelFromEnv } from './modelGateway.ts'
 
 const host = process.env.ZHIZHI_HOST ?? '127.0.0.1'
@@ -9,7 +9,9 @@ const port = Number(process.env.ZHIZHI_PORT ?? 8787)
 
 async function createStore(): Promise<LearningStore> {
   const dataDir = process.env.ZHIZHI_DATA_DIR?.trim()
-  const persistor = dataDir ? createFileSessionPersistor(dataDir) : undefined
+  const persistor = dataDir
+    ? createJournaledSessionPersistor(dataDir)
+    : undefined
   const store = new LearningStore({
     modelGateway: createOllamaGateway({
       model: resolveModelFromEnv(process.env),
