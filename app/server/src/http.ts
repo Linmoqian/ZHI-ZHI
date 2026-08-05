@@ -133,7 +133,7 @@ export function createApiHandler(store = new LearningStore()) {
         sendJson(
           response,
           201,
-          store.sendMessage(segments[2], segments[4], content),
+          await store.sendMessage(segments[2], segments[4], content),
         )
         return
       }

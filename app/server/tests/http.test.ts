@@ -9,6 +9,7 @@ import type {
 } from '../../shared/contracts.ts'
 import { createApiHandler } from '../src/http.ts'
 import { LearningStore } from '../src/learningStore.ts'
+import { createFakeGateway } from './testGateway.ts'
 
 test('HTTP 接口创建会话并拒绝空消息', async () => {
   await withApi(async (baseUrl) => {
@@ -98,7 +99,9 @@ test('HTTP 上下文接口不泄漏同级分支消息', async () => {
 })
 
 async function withApi(run: (baseUrl: string) => Promise<void>) {
-  const server = createServer(createApiHandler(new LearningStore()))
+  const server = createServer(
+    createApiHandler(new LearningStore({ modelGateway: createFakeGateway() })),
+  )
   await new Promise<void>((resolve) => {
     server.listen(0, '127.0.0.1', resolve)
   })

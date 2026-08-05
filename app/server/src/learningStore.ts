@@ -23,6 +23,12 @@ import type {
   StoredMessage,
 } from './domain.ts'
 import { ApiError } from './errors.ts'
+import {
+  assembleModelInput,
+  createOllamaGateway,
+  resolveModelFromEnv,
+  type ModelGateway,
+} from './modelGateway.ts'
 import { createSeedNodes } from './seed.ts'
 
 const branchTones: NodeTone[] = ['purple', 'orange', 'green', 'blue']
@@ -45,9 +51,19 @@ export type UpdateNodeInput = {
   position?: CanvasPosition
 }
 
+export type LearningStoreOptions = {
+  /** 模型网关；缺省时创建本地 Ollama 网关（模型由 ZHIZHI_MODEL 配置）。 */
+  modelGateway?: ModelGateway
+}
+
 export class LearningStore {
   private readonly sessions = new Map<string, SessionRecord>()
   readonly contentStore = new ContentStore()
+  private readonly modelGateway: ModelGateway
+
+  constructor(options: LearningStoreOptions = {}) {
+    this.modelGateway = options.modelGateway ?? createDefaultGateway()
+  }
 
   createSession(topic: string): LearningSession {
     const normalizedTopic = topic.trim()
@@ -220,11 +236,11 @@ export class LearningStore {
     return { node: { ...updatedNode } }
   }
 
-  sendMessage(
+  async sendMessage(
     sessionId: string,
     nodeId: string,
     content: string,
-  ): SendMessageResponse {
+  ): Promise<SendMessageResponse> {
     const session = this.requireSession(sessionId)
     const node = this.requireNode(session, nodeId)
     const normalizedContent = content.trim()
@@ -247,15 +263,26 @@ export class LearningStore {
       this.contentStore,
       nodeId,
     )
+
+    let reply: string
+    try {
+      reply = await this.modelGateway.complete(
+        assembleModelInput(compiledContext, normalizedContent),
+      )
+    } catch {
+      // 模型不可用或生成失败时，回退到本地规则模板，保证后端可用。
+      reply = createLocalResponse(
+        normalizedContent,
+        node.title,
+        compiledContext.messages.length,
+      )
+    }
+
     const assistantMessage = this.appendMessage(
       session,
       nodeId,
       'assistant',
-      createLocalResponse(
-        normalizedContent,
-        node.title,
-        compiledContext.messages.length,
-      ),
+      reply,
     )
 
     return {
@@ -399,6 +426,12 @@ function toContextTrace(context: CompiledContext): ContextTrace {
     branchIds: [...new Set(context.messages.map((message) => message.branchId))],
     inherited: context.inherited,
   }
+}
+
+function createDefaultGateway(): ModelGateway {
+  return createOllamaGateway({
+    model: resolveModelFromEnv(process.env),
+  })
 }
 
 function createLocalResponse(

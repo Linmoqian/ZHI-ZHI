@@ -14,6 +14,17 @@ npm run dev
 
 Vite 会把 `/api` 请求代理到后端。
 
+## 本地模型（Ollama）
+
+助手回复由本地 Ollama 生成（走 `/api/chat`），默认使用参数量小的 `llama2:latest` 以避免低内存环境卡死：
+
+```bash
+ollama pull llama2:latest   # 若尚未拉取
+ZHIZHI_MODEL=llama2:latest npm run dev
+```
+
+可通过 `ZHIZHI_MODEL` 指定其他本地模型。Ollama 不可用或生成失败时，后端会回退到本地规则模板，保证基础对话不中断。默认的后端 `/api/chat` 地址是 `http://127.0.0.1:11434`。
+
 ## 验证
 
 ```bash
@@ -46,5 +57,5 @@ npm run server:test
 ## MVP 边界
 
 - 数据保存在进程内存中，后端重启后重置。
-- 回答由确定性本地逻辑生成，尚未连接真实模型供应商。
+- 回答优先由本地 Ollama 生成；模型不可用时回退到确定性本地逻辑。
 - 暂不包含身份认证、数据库、附件、向量检索和持久化摘要树。
