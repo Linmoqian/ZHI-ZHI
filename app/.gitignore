@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# 知枝本地会话持久化数据
+.zhizhi-data
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

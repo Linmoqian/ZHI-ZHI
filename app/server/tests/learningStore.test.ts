@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
+import { mkdtemp, rm } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import test from 'node:test'
 import { ContentStore } from '../src/contentStore.ts'
+import { createFileSessionPersistor } from '../src/journal.ts'
+import type { ModelGateway } from '../src/modelGateway.ts'
 import { LearningStore } from '../src/learningStore.ts'
 import { createFakeGateway } from './testGateway.ts'
 
@@ -120,4 +125,51 @@ test('合并只向父节点写入结论，不复制分支原文', async () => {
         !message.content.includes('不要复制的分支原文 161803'),
     ),
   )
+})
+
+test('会话快照持久化后恢复保留 DAG 与隔离语义', async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'zhizhi-test-'))
+  const gateway: ModelGateway = {
+    complete: () => Promise.resolve('助手回复'),
+  }
+
+  try {
+    const store = new LearningStore({
+      modelGateway: gateway,
+      persistor: createFileSessionPersistor(dataDir),
+    })
+    const session = store.createSession('持久化测试主题')
+    const branch = store.createBranch(session.id, 'self-attention', {
+      title: '持久化隔离分支',
+      contextMode: 'isolated',
+    })
+    await store.sendMessage(session.id, branch.node.id, '隔离文本 112233')
+    await store.persistSession(session.id)
+    const before = store.getCompiledContext(session.id, branch.node.id)
+
+    const restored = new LearningStore({
+      modelGateway: gateway,
+      persistor: createFileSessionPersistor(dataDir),
+    })
+    const persistor = createFileSessionPersistor(dataDir)
+    const ids = await persistor.listSessionIds()
+    assert.equal(ids.length, 1)
+    const dump = await persistor.load(ids[0])
+    assert.ok(dump)
+    restored.restoreSession(dump)
+
+    const after = restored.getCompiledContext(session.id, branch.node.id)
+    assert.equal(after.messages.length, before.messages.length)
+    assert.ok(
+      after.messages.some((message) =>
+        message.content.includes('隔离文本 112233'),
+      ),
+    )
+    assert.ok(after.messages.length >= 1)
+    assert.ok(
+      after.messages.every((message) => message.branchId === branch.node.id),
+    )
+  } finally {
+    await rm(dataDir, { recursive: true, force: true })
+  }
 })

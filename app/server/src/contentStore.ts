@@ -5,6 +5,8 @@ type ContentBlob = {
   referenceCount: number
 }
 
+export type SerializedBlob = Omit<ContentBlob, never> & { hash: string }
+
 export class ContentStore {
   private readonly blobs = new Map<string, ContentBlob>()
 
@@ -19,6 +21,25 @@ export class ContentStore {
     }
 
     return hash
+  }
+
+  /** 从序列化的 Blob 列表恢复内容存储（用于会话快照恢复）。 */
+  hydrate(blobs: SerializedBlob[]) {
+    for (const blob of blobs) {
+      this.blobs.set(blob.hash, {
+        content: blob.content,
+        referenceCount: blob.referenceCount,
+      })
+    }
+  }
+
+  /** 导出当前所有 Blob（用于会话快照序列化）。 */
+  toSerializedBlobs(): SerializedBlob[] {
+    return [...this.blobs.entries()].map(([hash, blob]) => ({
+      hash,
+      content: blob.content,
+      referenceCount: blob.referenceCount,
+    }))
   }
 
   get(hash: string) {

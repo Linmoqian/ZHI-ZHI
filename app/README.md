@@ -25,6 +25,16 @@ ZHIZHI_MODEL=llama2:latest npm run dev
 
 可通过 `ZHIZHI_MODEL` 指定其他本地模型。Ollama 不可用或生成失败时，后端会回退到本地规则模板，保证基础对话不中断。默认的后端 `/api/chat` 地址是 `http://127.0.0.1:11434`。
 
+## 持久化
+
+默认会话只保存在进程内存中。设置 `ZHIZHI_DATA_DIR` 后启用文件持久化：
+
+```bash
+ZHIZHI_DATA_DIR=.zhizhi-data npm run dev
+```
+
+每个会话以一份 JSON 快照写入该目录（原子替换），包含分支指针、消息父链与内容 Blob，可精确还原不可变 DAG 与上下文隔离语义。后端启动时会自动恢复已存在会话。
+
 ## 验证
 
 ```bash
@@ -56,6 +66,6 @@ npm run server:test
 
 ## MVP 边界
 
-- 数据保存在进程内存中，后端重启后重置。
+- 数据默认保存在进程内存中；设置 `ZHIZHI_DATA_DIR` 后按会话快照持久化，重启可恢复。
 - 回答优先由本地 Ollama 生成；模型不可用时回退到确定性本地逻辑。
 - 暂不包含身份认证、数据库、附件、向量检索和持久化摘要树。

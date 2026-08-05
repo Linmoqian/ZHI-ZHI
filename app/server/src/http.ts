@@ -58,9 +58,9 @@ export function createApiHandler(store = new LearningStore()) {
       ) {
         const body = await readJson(request)
         const topic = requireString(body.topic, '学习主题不能为空')
-        sendJson(response, 201, {
-          session: store.createSession(topic),
-        })
+        const session = store.createSession(topic)
+        await store.persistSession(session.id)
+        sendJson(response, 201, { session })
         return
       }
 
@@ -91,15 +91,13 @@ export function createApiHandler(store = new LearningStore()) {
         segments.length === 5
       ) {
         const body = await readJson(request)
-        sendJson(
-          response,
-          200,
-          store.updateNode(
-            segments[2],
-            segments[4],
-            toUpdateNodeInput(body),
-          ),
+        const result = store.updateNode(
+          segments[2],
+          segments[4],
+          toUpdateNodeInput(body),
         )
+        await store.persistSession(segments[2])
+        sendJson(response, 200, result)
         return
       }
 
@@ -110,15 +108,13 @@ export function createApiHandler(store = new LearningStore()) {
         segments.length === 6
       ) {
         const body = await readJson(request)
-        sendJson(
-          response,
-          201,
-          store.createBranch(
-            segments[2],
-            segments[4],
-            toCreateBranchInput(body),
-          ),
+        const branchResult = store.createBranch(
+          segments[2],
+          segments[4],
+          toCreateBranchInput(body),
         )
+        await store.persistSession(segments[2])
+        sendJson(response, 201, branchResult)
         return
       }
 
@@ -130,11 +126,13 @@ export function createApiHandler(store = new LearningStore()) {
       ) {
         const body = await readJson(request)
         const content = requireString(body.content, '消息内容不能为空')
-        sendJson(
-          response,
-          201,
-          await store.sendMessage(segments[2], segments[4], content),
+        const sendResult = await store.sendMessage(
+          segments[2],
+          segments[4],
+          content,
         )
+        await store.persistSession(segments[2])
+        sendJson(response, 201, sendResult)
         return
       }
 
@@ -144,11 +142,9 @@ export function createApiHandler(store = new LearningStore()) {
         segments[5] === 'merge' &&
         segments.length === 6
       ) {
-        sendJson(
-          response,
-          200,
-          store.mergeBranch(segments[2], segments[4]),
-        )
+        const mergeResult = store.mergeBranch(segments[2], segments[4])
+        await store.persistSession(segments[2])
+        sendJson(response, 200, mergeResult)
         return
       }
 

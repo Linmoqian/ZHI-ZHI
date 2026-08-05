@@ -19,6 +19,7 @@ import { ContentStore } from './contentStore.ts'
 import type {
   BranchRecord,
   CompiledContext,
+  SessionDump,
   SessionRecord,
   StoredMessage,
 } from './domain.ts'
@@ -29,6 +30,7 @@ import {
   resolveModelFromEnv,
   type ModelGateway,
 } from './modelGateway.ts'
+import type { SessionPersistor } from './journal.ts'
 import { createSeedNodes } from './seed.ts'
 
 const branchTones: NodeTone[] = ['purple', 'orange', 'green', 'blue']
@@ -54,15 +56,19 @@ export type UpdateNodeInput = {
 export type LearningStoreOptions = {
   /** 模型网关；缺省时创建本地 Ollama 网关（模型由 ZHIZHI_MODEL 配置）。 */
   modelGateway?: ModelGateway
+  /** 会话持久化器；提供时将每个 mutation 后的最新会话快照写入持久层。 */
+  persistor?: SessionPersistor
 }
 
 export class LearningStore {
   private readonly sessions = new Map<string, SessionRecord>()
   readonly contentStore = new ContentStore()
   private readonly modelGateway: ModelGateway
+  private readonly persistor?: SessionPersistor
 
   constructor(options: LearningStoreOptions = {}) {
     this.modelGateway = options.modelGateway ?? createDefaultGateway()
+    this.persistor = options.persistor
   }
 
   createSession(topic: string): LearningSession {
@@ -346,6 +352,50 @@ export class LearningStore {
     const session = this.requireSession(sessionId)
     this.requireNode(session, nodeId)
     return compileBranchContext(session, this.contentStore, nodeId)
+  }
+
+  /**
+   * 将指定会话的最新完整快照写入持久层；未配置持久化器时为空操作。
+   * 供外部在每次 mutation 后调用，实现进程重启后的恢复。
+   */
+  async persistSession(sessionId: string): Promise<void> {
+    if (!this.persistor) {
+      return
+    }
+    await this.persistor.persist(this.serializeSession(sessionId))
+  }
+
+  /** 将指定会话序列化为可持久化的完整状态。 */
+  serializeSession(sessionId: string): SessionDump {
+    const session = this.requireSession(sessionId)
+    return {
+      id: session.id,
+      topic: session.topic,
+      createdAt: session.createdAt,
+      nodes: [...session.nodes.values()].map((node) => ({ ...node })),
+      branches: [...session.branches.values()].map((branch) => ({ ...branch })),
+      messages: [...session.messages.values()].map((message) => ({ ...message })),
+      blobs: this.contentStore.toSerializedBlobs(),
+    }
+  }
+
+  /** 从持久化的完整快照恢复一个会话，返回其公开快照。 */
+  restoreSession(dump: SessionDump): LearningSession {
+    if (this.sessions.has(dump.id)) {
+      throw new ApiError(409, 'SESSION_EXISTS', '会话已存在，无法重复恢复')
+    }
+
+    this.contentStore.hydrate(dump.blobs)
+    const session: SessionRecord = {
+      id: dump.id,
+      topic: dump.topic,
+      createdAt: dump.createdAt,
+      nodes: new Map(dump.nodes.map((node) => [node.id, { ...node }])),
+      branches: new Map(dump.branches.map((branch) => [branch.id, { ...branch }])),
+      messages: new Map(dump.messages.map((message) => [message.id, { ...message }])),
+    }
+    this.sessions.set(dump.id, session)
+    return this.toSnapshot(session)
   }
 
   private appendMessage(
