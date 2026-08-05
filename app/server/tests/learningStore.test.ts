@@ -7,6 +7,7 @@ import { ContentStore } from '../src/contentStore.ts'
 import { createFileSessionPersistor } from '../src/journal.ts'
 import type { ModelGateway } from '../src/modelGateway.ts'
 import { LearningStore } from '../src/learningStore.ts'
+import { buildSummaryBlock, SUMMARY_BLOCK_SIZE } from '../src/summary.ts'
 import { createFakeGateway } from './testGateway.ts'
 
 function createStore(): LearningStore {
@@ -125,6 +126,49 @@ test('合并只向父节点写入结论，不复制分支原文', async () => {
         !message.content.includes('不要复制的分支原文 161803'),
     ),
   )
+})
+
+test('历史超过阈值时远端压缩为分层摘要，保留近期原文', async () => {
+  const store = createStore()
+  const session = store.createSession('分层摘要验证')
+
+  // 发多轮消息，使可见历史超过默认近期阈值 12
+  for (let i = 0; i < 20; i += 1) {
+    await store.sendMessage(session.id, 'self-attention', `第 ${i} 轮问题`)
+  }
+
+  const context = store.getCompiledContext(session.id, 'self-attention')
+  assert.ok(
+    context.messages.length <= 12,
+    '近期原文不应超过阈值',
+  )
+  assert.ok(
+    context.summaryBlocks.length > 0,
+    '远端历史应产生分层摘要',
+  )
+  // 最新一轮问题的原文应在近期消息里
+  assert.ok(
+    context.messages.some((message) =>
+      message.content.includes('第 19 轮问题'),
+    ),
+  )
+  // 摘要内容应结构化
+  for (const summary of context.summaryBlocks) {
+    assert.ok(Array.isArray(summary.establishedFacts))
+    assert.ok(Array.isArray(summary.openQuestions))
+  }
+})
+
+test('本地摘要生成器产出结构化的目标与疑问', () => {
+  const messages = [
+    { id: '1', branchId: 'b', role: 'user' as const, content: '它解决什么问题？' },
+    { id: '2', branchId: 'b', role: 'assistant' as const, content: '它用于选择相关信息。' },
+  ]
+  const summary = buildSummaryBlock('主题', messages)
+  assert.ok(summary.goal.includes('主题'))
+  assert.deepEqual(summary.establishedFacts, ['它用于选择相关信息。'])
+  assert.deepEqual(summary.openQuestions, ['它解决什么问题？'])
+  assert.equal(SUMMARY_BLOCK_SIZE, 4)
 })
 
 test('会话快照持久化后恢复保留 DAG 与隔离语义', async () => {

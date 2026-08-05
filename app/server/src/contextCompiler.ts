@@ -1,10 +1,12 @@
 import type { ContentStore } from './contentStore.ts'
 import type {
   CompiledContext,
+  CompiledContextMessage,
   SessionRecord,
   StoredMessage,
 } from './domain.ts'
 import { ApiError } from './errors.ts'
+import { splitHistory } from './summary.ts'
 
 const DEFAULT_RECENT_MESSAGE_LIMIT = 12
 
@@ -44,20 +46,27 @@ export function compileBranchContext(
     cursorId = message.parentId
   }
 
-  const path = reversedPath
-    .reverse()
-    .slice(-Math.max(1, recentMessageLimit))
+  // 完整可见链“最新优先”。把远端历史压缩为分层摘要，只保留近期原文。
+  const allMessages: CompiledContextMessage[] = reversedPath.map(
+    (message) => ({
+      id: message.id,
+      branchId: message.branchId,
+      role: message.role,
+      content: contentStore.get(message.contentHash),
+    }),
+  )
+  const { summaries, recentMessages } = splitHistory(
+    allMessages,
+    Math.max(1, recentMessageLimit),
+    session.topic,
+  )
 
   return {
     sessionId: session.id,
     branchId,
     topic: session.topic,
     inherited: branch.contextMode === 'inherit',
-    messages: path.map((message) => ({
-      id: message.id,
-      branchId: message.branchId,
-      role: message.role,
-      content: contentStore.get(message.contentHash),
-    })),
+    messages: recentMessages,
+    summaryBlocks: summaries,
   }
 }

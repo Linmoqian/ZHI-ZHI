@@ -37,12 +37,24 @@ export type CompiledContextMessage = {
   content: string
 }
 
+/** 结构化摘要：目标、已建立事实、用户理解、待解决问题、关联节点引用。 */
+export type StructuredSummary = {
+  goal: string
+  establishedFacts: string[]
+  userUnderstanding: string[]
+  openQuestions: string[]
+  nodeRefs: string[]
+}
+
 export type CompiledContext = {
   sessionId: string
   branchId: string
   topic: string
   inherited: boolean
+  /** 近期原始消息（默认最多 12 条）。 */
   messages: CompiledContextMessage[]
+  /** 远端历史的分层摘要块，按时间顺序排列。 */
+  summaryBlocks: StructuredSummary[]
 }
 
 /** 完整的可序列化会话状态，用于持久化与恢复。

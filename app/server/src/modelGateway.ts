@@ -62,7 +62,31 @@ export function toChatMessages(input: ModelInput): ChatMessage[] {
       .join('\n')
     messages.push({
       role: 'system',
-      content: `以下是本分支可见的历史消息：\n${body}`,
+      content: `以下是本分支可见的近期历史消息：\n${body}`,
+    })
+  }
+
+  if (compiledContext.summaryBlocks.length > 0) {
+    const blocks = compiledContext.summaryBlocks
+      .map((summary, index) => {
+        const facts = summary.establishedFacts.map(
+          (fact) => `- ${fact}`).join('\n')
+        const questions = summary.openQuestions
+          .map((question) => `- ${question}`)
+          .join('\n')
+        return [
+          `第 ${index + 1} 段摘要（较早历史）：`,
+          `目标：${summary.goal}`,
+          facts ? `已建立事实：\n${facts}` : '',
+          questions ? `先前疑问：\n${questions}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n')
+      })
+      .join('\n\n')
+    messages.push({
+      role: 'system',
+      content: `本分支较早的历史已压缩为如下分层摘要，仅供参考：\n${blocks}`,
     })
   }
 
