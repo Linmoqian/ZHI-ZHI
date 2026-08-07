@@ -1,3 +1,4 @@
+import { motion } from 'motion/react'
 import type { PixelIconName, TurnSessionSummary } from '../types'
 import { PixelIcon } from './PixelIcon'
 
@@ -70,11 +71,19 @@ function RecentSessionCard({
   onContinue: () => void
 }) {
   return (
-    <article className={`recent-card tone-${meta.tone}`}>
+    <motion.article
+      className={`recent-card tone-${meta.tone}`}
+      whileHover={{ y: -6 }}
+      transition={{ type: 'spring', stiffness: 380, damping: 26 }}
+    >
       <div className="recent-card__heading">
-        <span className="icon-cube">
+        <motion.span
+          className="icon-cube"
+          whileHover={{ rotate: -8, scale: 1.08 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+        >
           <PixelIcon name={meta.icon} />
-        </span>
+        </motion.span>
         <div>
           <span>对话路径</span>
           <h3>{session.topic}</h3>
@@ -96,7 +105,7 @@ function RecentSessionCard({
           <PixelIcon name="arrow" />
         </button>
       </div>
-    </article>
+    </motion.article>
   )
 }
 

@@ -566,6 +566,14 @@
   border-radius: 9px;
   background: rgba(255, 253, 248, 0.95);
   box-shadow: 0 5px 0 #ded7ca, 5px 8px 0 rgba(90, 78, 58, 0.08);
+  transition: box-shadow 0.25s ease;
+}
+
+.recent-card:hover {
+  box-shadow:
+    0 8px 0 #d4cdbc,
+    8px 16px 0 rgba(90, 78, 58, 0.1),
+    0 18px 32px rgba(72, 58, 40, 0.1);
 }
 
 .recent-card__heading {
@@ -957,6 +965,31 @@
   align-items: center;
   width: 14px;
   height: 100%;
+}
+
+/* 卡片内层包裹：拖拽互换时整卡片跟随指针平移 */
+.split-pane__card-inner {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  will-change: transform;
+}
+
+/* 被拖拽的卡片：抬起、加深阴影，像被抓起来 */
+.split-pane__panel.is-dragging-card {
+  z-index: 30;
+}
+
+.split-pane__panel.is-dragging-card > .split-pane__card-inner > .workspace-panel {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 4px 0 #d4cdbc,
+    0 10px 0 rgba(102, 88, 67, 0.06),
+    0 28px 48px rgba(72, 58, 40, 0.18);
+  opacity: 0.96;
 }
 
 /* 拖拽手柄：两栏之间可抓取的分隔条 */

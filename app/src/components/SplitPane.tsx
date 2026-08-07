@@ -5,38 +5,29 @@ import { AnimatePresence, motion } from 'motion/react'
  * 可调整左右两栏占比的分隔面板。
  *
  * - 拖拽中间分隔条实时调整两栏宽度
- * - 拖拽任一面板的标题栏（header）到另一面板，可互换两栏位置
- *   （类似 VS Code 拖动视图标签）
+ * - 拖拽任一面板的标题栏（header）可把整张卡片拖到另一侧互换位置
+ *   （类似 VS Code 拖动视图标签，但整卡片跟随指针，非截图幽灵）
  * - 双击分隔条切换左栏的显示/隐藏（带 Motion 宽度动画）
  * - 左栏隐藏后露出竖向「显示」条，点击恢复
- *
- * 拖拽宽度时通过 inline style 直接设 width，避免每帧触发 React 重渲染；
- * 拖拽结束时再提交 ratio 到 state。
- *
- * 面板互换通过 CSS order + Motion layout 动画，面板平滑滑过对方，
- * ratio 自动取补（互换后原左栏占比 0.35 → 新右栏占比 0.35）。
  */
 
 type SplitPaneProps = {
-  /** 左栏节点 */
   left: React.ReactNode
-  /** 右栏节点 */
   right: React.ReactNode
-  /** 左栏是否可见；由父组件控制，用于显影切换 */
   isLeftVisible: boolean
-  /** 左栏占比 0~1，受控值 */
   ratio: number
-  /** 拖拽或双击后提交新 ratio */
   onRatioChange: (ratio: number) => void
-  /** 显影切换回调（双击分隔条 / 点击露出竖条时触发） */
   onToggleLeft: () => void
 }
+
+type Side = 'left' | 'right'
 
 const MIN_RATIO = 0.22
 const MAX_RATIO = 0.68
 const SWAP_DURATION = 0.4
 /** header 选择器：拖拽这些元素可互换面板。 */
 const HEADER_SELECTOR = '.panel-header, .conversation-header'
+/** 触发互换：指针跨越容器中线即互换。 */
 
 export function SplitPane({
   left,
@@ -47,13 +38,19 @@ export function SplitPane({
   onToggleLeft,
 }: SplitPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const leftRef = useRef<HTMLDivElement>(null)
-  const rightRef = useRef<HTMLDivElement>(null)
   const [dragRatio, setDragRatio] = useState<number | null>(null)
   const [isHovering, setIsHovering] = useState(false)
   const [isSwapped, setIsSwapped] = useState(false)
-  /** 拖拽中的目标面板（'left' | 'right' | null）。 */
-  const [dragOver, setDragOver] = useState<'left' | 'right' | null>(null)
+
+  /** 卡片拖拽互换状态。 */
+  const [cardDrag, setCardDrag] = useState<{
+    side: Side
+    startX: number
+    /** 当前水平位移（px）。 */
+    offset: number
+    /** 指针当前所在的半区，用于高亮目标。 */
+    over: Side
+  } | null>(null)
 
   const effectiveRatio = dragRatio ?? ratio
   const leftPercent = isLeftVisible ? effectiveRatio * 100 : 0
@@ -62,7 +59,7 @@ export function SplitPane({
     return Math.min(MAX_RATIO, Math.max(MIN_RATIO, value))
   }, [])
 
-  const handlePointerDown = useCallback(
+  const handleResizePointerDown = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
       if (!isLeftVisible) {
         return
@@ -75,8 +72,7 @@ export function SplitPane({
 
       const rect = container.getBoundingClientRect()
       const move = (clientX: number) => {
-        const next = clamp((clientX - rect.left) / rect.width)
-        setDragRatio(next)
+        setDragRatio(clamp((clientX - rect.left) / rect.width))
       }
       move(event.clientX)
 
@@ -102,58 +98,71 @@ export function SplitPane({
     [clamp, isLeftVisible, onRatioChange],
   )
 
-  /**
-   * 面板互换。拖拽面板 header 到另一面板时触发。
-   * 通过 CSS order 切换视觉位置，Motion layout 负责过渡动画；
-   * ratio 取补，使原面板在新位置保持同等宽度。
-   */
+  /** 面板互换：order 切换视觉位置 + Motion layout 过渡，ratio 取补。 */
   const swap = useCallback(() => {
     onRatioChange(1 - ratio)
     setIsSwapped((swapped) => !swapped)
   }, [onRatioChange, ratio])
 
-  // HTML5 拖拽：header 为拖拽源，面板容器为放置目标。
-  // header 内的交互元素（按钮等）不触发拖拽，避免误操作。
-  const handleDragStart = useCallback(
-    (event: React.DragEvent<HTMLDivElement>) => {
+  /**
+   * 卡片拖拽：pointerdown 落在 header 上时启动。
+   * 拖拽中被拖卡片整体跟随指针平移；松手时若跨越中线则互换。
+   */
+  const handleCardPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>, side: Side) => {
       const target = event.target as HTMLElement
       if (!target.closest(HEADER_SELECTOR)) {
         return
       }
+      // header 内的交互元素（按钮等）不触发拖拽
       if (target.closest('button, input, textarea, select, a')) {
         return
       }
-      event.dataTransfer.effectAllowed = 'move'
-      // 用空透明图替代默认拖拽幽灵，避免视觉混乱（由 dragOver 高亮提示）。
-      event.dataTransfer.setData('text/plain', 'panel-swap')
-    },
-    [],
-  )
-
-  const handleDragOver = useCallback(
-    (event: React.DragEvent<HTMLDivElement>, side: 'left' | 'right') => {
-      if (!event.dataTransfer.types.includes('text/plain')) {
+      event.preventDefault()
+      const container = containerRef.current
+      if (!container) {
         return
       }
-      event.preventDefault()
-      event.dataTransfer.dropEffect = 'move'
-      setDragOver(side)
-    },
-    [],
-  )
+      const rect = container.getBoundingClientRect()
+      const startX = event.clientX
 
-  const handleDrop = useCallback(
-    (side: 'left' | 'right') => {
-      setDragOver(null)
-      // 拖到另一侧才互换；拖回自身不操作。
-      if (
-        (side === 'left' && !isSwapped) ||
-        (side === 'right' && isSwapped)
-      ) {
-        swap()
+      setCardDrag({ side, startX, offset: 0, over: side })
+      document.body.style.userSelect = 'none'
+      document.body.style.cursor = 'grabbing'
+
+      const onMove = (e: PointerEvent) => {
+        const offset = e.clientX - startX
+        const over: Side =
+          e.clientX - rect.left < rect.width / 2 ? 'left' : 'right'
+        setCardDrag((current) =>
+          current ? { ...current, offset, over } : null,
+        )
       }
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        document.body.style.userSelect = ''
+        document.body.style.cursor = ''
+        setCardDrag((current) => {
+          if (current) {
+            // 跨越容器中线才互换
+            const draggedFromLeft = current.side === 'left'
+            const shouldSwap = draggedFromLeft
+              ? current.over === 'right'
+              : current.over === 'left'
+            if (shouldSwap) {
+              // 用 setTimeout 让 cardDrag 先清空，避免与 layout 动画冲突
+              setTimeout(swap, 0)
+            }
+          }
+          return null
+        })
+      }
+
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
     },
-    [isSwapped, swap],
+    [swap],
   )
 
   useEffect(() => {
@@ -166,37 +175,45 @@ export function SplitPane({
   const leftOrder = isSwapped ? 3 : 1
   const rightOrder = isSwapped ? 1 : 3
 
+  /** 被拖卡片是否当前位移应触发互换高亮。 */
+  const isLeftDragTarget =
+    cardDrag !== null && cardDrag.side !== 'left' && cardDrag.over === 'left'
+  const isRightDragTarget =
+    cardDrag !== null &&
+    cardDrag.side !== 'right' &&
+    cardDrag.over === 'right'
+
   return (
     <div ref={containerRef} className="split-pane">
       <motion.div
-        ref={leftRef}
         className={`split-pane__panel split-pane__left ${
-          dragOver === 'left' ? 'is-drop-target' : ''
-        }`}
-        layout={dragRatio === null}
+          isLeftDragTarget ? 'is-drop-target' : ''
+        } ${cardDrag?.side === 'left' ? 'is-dragging-card' : ''}`}
+        layout={dragRatio === null && cardDrag === null}
         transition={{
           layout: { duration: SWAP_DURATION, ease: [0.22, 1, 0.36, 1] },
         }}
         style={{
           order: leftOrder,
-          // 拖拽中直接跟随指针（inline style，无过渡）；
-          // 非拖拽时交给 motion animate 做卡片变形动画。
           ...(dragRatio !== null
             ? { width: `${leftPercent}%`, transition: 'none' }
             : {}),
+          zIndex: cardDrag?.side === 'left' ? 30 : undefined,
         }}
-        animate={
-          dragRatio === null ? { width: `${leftPercent}%` } : false
-        }
-        draggable
-        onDragStartCapture={handleDragStart}
-        onDragOverCapture={(e) => handleDragOver(e, 'left')}
-        onDragLeave={() =>
-          setDragOver((current) => (current === 'left' ? null : current))
-        }
-        onDrop={() => handleDrop('left')}
+        animate={dragRatio === null ? { width: `${leftPercent}%` } : false}
+        onPointerDown={(e) => handleCardPointerDown(e, 'left')}
       >
-        {left}
+        <motion.div
+          className="split-pane__card-inner"
+          animate={{ x: cardDrag?.side === 'left' ? cardDrag.offset : 0 }}
+          transition={
+            cardDrag?.side === 'left'
+              ? { type: 'spring', stiffness: 500, damping: 40 }
+              : { duration: SWAP_DURATION, ease: [0.22, 1, 0.36, 1] }
+          }
+        >
+          {left}
+        </motion.div>
       </motion.div>
 
       {isLeftVisible ? (
@@ -208,7 +225,7 @@ export function SplitPane({
             }`}
             aria-label="拖拽调整宽度，双击隐藏左栏"
             title="拖拽调整宽度 · 双击隐藏"
-            onPointerDown={handlePointerDown}
+            onPointerDown={handleResizePointerDown}
             onDoubleClick={onToggleLeft}
             onHoverStart={() => setIsHovering(true)}
             onHoverEnd={() => setIsHovering(false)}
@@ -245,24 +262,30 @@ export function SplitPane({
       )}
 
       <motion.div
-        ref={rightRef}
         className={`split-pane__panel split-pane__right ${
-          dragOver === 'right' ? 'is-drop-target' : ''
-        }`}
-        layout={dragRatio === null}
+          isRightDragTarget ? 'is-drop-target' : ''
+        } ${cardDrag?.side === 'right' ? 'is-dragging-card' : ''}`}
+        layout={dragRatio === null && cardDrag === null}
         transition={{
           layout: { duration: SWAP_DURATION, ease: [0.22, 1, 0.36, 1] },
         }}
-        style={{ order: rightOrder }}
-        draggable
-        onDragStartCapture={handleDragStart}
-        onDragOverCapture={(e) => handleDragOver(e, 'right')}
-        onDragLeave={() =>
-          setDragOver((current) => (current === 'right' ? null : current))
-        }
-        onDrop={() => handleDrop('right')}
+        style={{
+          order: rightOrder,
+          zIndex: cardDrag?.side === 'right' ? 30 : undefined,
+        }}
+        onPointerDown={(e) => handleCardPointerDown(e, 'right')}
       >
-        {right}
+        <motion.div
+          className="split-pane__card-inner"
+          animate={{ x: cardDrag?.side === 'right' ? cardDrag.offset : 0 }}
+          transition={
+            cardDrag?.side === 'right'
+              ? { type: 'spring', stiffness: 500, damping: 40 }
+              : { duration: SWAP_DURATION, ease: [0.22, 1, 0.36, 1] }
+          }
+        >
+          {right}
+        </motion.div>
       </motion.div>
     </div>
   )
