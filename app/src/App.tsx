@@ -107,10 +107,10 @@ function App() {
         const { session } = await turnApi.getSession(sessionIdToResume)
         setSessionId(session.id)
         setTurns(session.turns)
-        // 默认定位到创建时间最新的叶回合
-        const leaf = [...session.turns]
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
-        setActiveLeafId(leaf?.id ?? null)
+        // 默认定位到创建时间最新的叶回合（一次遍历，避免排序）
+        const latest = session.turns.reduce<TurnDTO | null>((acc, turn) =>
+          !acc || turn.createdAt > acc.createdAt ? turn : acc, null)
+        setActiveLeafId(latest?.id ?? null)
         setDraftMode(false)
         setCurrentPanel('conversation')
         setIsGenerating(false)
