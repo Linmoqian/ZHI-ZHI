@@ -3,12 +3,16 @@ import type { CompiledContext } from './domain.ts'
 export type ModelGateway = {
   /** 根据编译后的分支上下文生成助手回复；失败时抛出异常。 */
   complete(input: ModelInput): Promise<string>
+  /** 用独立提示词生成“一句话概括”；失败时抛出异常。 */
+  summarize(content: string): Promise<string>
 }
 
 export type ModelInput = {
   compiledContext: CompiledContext
   userMessage: string
 }
+
+const SUMMARIZE_SYSTEM_PROMPT = '一句话概括以下内容，要求精炼、贴近原意、不要展开。'
 
 type ChatRole = 'system' | 'user' | 'assistant'
 
@@ -114,39 +118,57 @@ export function createOllamaGateway(options: {
   const temperature = options.temperature ?? 0.4
   const fetchImpl = options.fetchImpl ?? fetch
 
+  async function chat(
+    messages: ChatMessage[],
+    overrides?: { numPredict?: number; temperature?: number },
+  ) {
+    const response = await fetchImpl(`${endpoint}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: false,
+        options: {
+          num_predict: overrides?.numPredict ?? numPredict,
+          temperature: overrides?.temperature ?? temperature,
+        },
+      }),
+      signal: AbortSignal.timeout(120_000),
+    })
+
+    if (!response.ok) {
+      throw new Error(
+        `Ollama 请求失败：HTTP ${response.status} ${response.statusText}`,
+      )
+    }
+
+    const payload = (await response.json()) as {
+      message?: { content?: string }
+      error?: string
+    }
+    if (payload.error) {
+      throw new Error(`Ollama 返回错误：${payload.error}`)
+    }
+    const content = payload.message?.content?.trim()
+    if (!content) {
+      throw new Error('Ollama 返回了空回复')
+    }
+    return content
+  }
+
   return {
     async complete(input) {
       const conversation = toChatMessages(input)
-      const response = await fetchImpl(`${endpoint}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model,
-          messages: conversation,
-          stream: false,
-          options: { num_predict: numPredict, temperature },
-        }),
-        signal: AbortSignal.timeout(120_000),
-      })
+      return chat(conversation)
+    },
 
-      if (!response.ok) {
-        throw new Error(
-          `Ollama 请求失败：HTTP ${response.status} ${response.statusText}`,
-        )
-      }
-
-      const payload = (await response.json()) as {
-        message?: { content?: string }
-        error?: string
-      }
-      if (payload.error) {
-        throw new Error(`Ollama 返回错误：${payload.error}`)
-      }
-      const content = payload.message?.content?.trim()
-      if (!content) {
-        throw new Error('Ollama 返回了空回复')
-      }
-      return content
+    async summarize(content) {
+      // 独立提示词：不与知枝助手的回复角色混用。
+      return chat([
+        { role: 'system', content: SUMMARIZE_SYSTEM_PROMPT },
+        { role: 'user', content },
+      ])
     },
   }
 }

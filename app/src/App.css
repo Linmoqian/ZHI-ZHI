@@ -487,6 +487,16 @@
   gap: 24px;
 }
 
+.recent-empty {
+  padding: 28px 20px;
+  border: 1px dashed var(--line);
+  border-radius: 9px;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 12px;
+  text-align: center;
+}
+
 .recent-card {
   min-width: 0;
   padding: 16px 16px 14px;
@@ -1797,6 +1807,68 @@
   border-radius: 8px 3px 8px 8px;
   background: #e8f2ff;
   box-shadow: 3px 4px 0 rgba(70, 111, 160, 0.11);
+}
+
+.message-round {
+  width: 100%;
+}
+
+.round-divider {
+  display: flex;
+  max-width: 680px;
+  margin: 4px auto 26px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.round-divider__rule {
+  height: 1px;
+  flex: 1 1 auto;
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in srgb, var(--line) 80%, transparent)
+  );
+}
+
+.round-divider__rule:last-child {
+  background: linear-gradient(
+    to left,
+    transparent,
+    color-mix(in srgb, var(--line) 80%, transparent)
+  );
+}
+
+.round-clone-button {
+  display: inline-flex;
+  padding: 5px 11px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 10px;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.round-clone-button svg {
+  width: 13px;
+  height: 13px;
+  color: var(--purple);
+}
+
+.round-clone-button:hover {
+  border-color: #b9a7e8;
+  color: var(--ink);
+  background: #f4f0ff;
+}
+
+.round-clone-button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .conversation-empty {

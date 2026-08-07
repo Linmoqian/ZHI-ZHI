@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from 'react'
-import { RECENT_PROJECTS } from '../data'
-import type { NodeTone, RecentProject } from '../types'
+import type { NodeTone, PixelIconName, SessionSummary } from '../types'
 import { PixelIcon } from './PixelIcon'
 
 type HomeViewProps = {
   onStartLearning: (topic: string) => void
   isStarting: boolean
+  recentSessions: SessionSummary[]
+  onContinueSession: (sessionId: string) => void
 }
 
 const toneSteps: NodeTone[] = [
@@ -15,6 +16,19 @@ const toneSteps: NodeTone[] = [
   'purple',
   'blue',
 ]
+
+const cardTones: NodeTone[] = ['blue', 'green', 'purple']
+const cardIcons: PixelIconName[] = ['brain', 'leaf', 'atom']
+
+type CardMeta = {
+  tone: NodeTone
+  icon: PixelIconName
+}
+
+const metaForIndex = (index: number): CardMeta => ({
+  tone: cardTones[index % cardTones.length],
+  icon: cardIcons[index % cardIcons.length],
+})
 
 function TopicIllustration() {
   return (
@@ -36,7 +50,7 @@ function TopicIllustration() {
   )
 }
 
-function ProjectPreview({ tone }: { tone: RecentProject['tone'] }) {
+function ProjectPreview({ tone }: { tone: NodeTone }) {
   return (
     <div className={`project-preview tone-${tone}`} aria-hidden="true">
       <svg viewBox="0 0 240 112">
@@ -52,37 +66,56 @@ function ProjectPreview({ tone }: { tone: RecentProject['tone'] }) {
   )
 }
 
-function RecentProjectCard({
-  project,
+const PROGRESS_SEGMENTS = 9
+
+function RecentSessionCard({
+  session,
+  meta,
   onContinue,
 }: {
-  project: RecentProject
+  session: SessionSummary
+  meta: CardMeta
   onContinue: () => void
 }) {
+  // 用真实完成节点占节点总数的比例，映射到固定段数的进度条。
+  const filledSegments =
+    session.nodeCount > 0
+      ? Math.round(
+          (session.completedNodes / session.nodeCount) * PROGRESS_SEGMENTS,
+        )
+      : 0
+
   return (
-    <article className={`recent-card tone-${project.tone}`}>
+    <article className={`recent-card tone-${meta.tone}`}>
       <div className="recent-card__heading">
         <span className="icon-cube">
-          <PixelIcon name={project.icon} />
+          <PixelIcon name={meta.icon} />
         </span>
         <div>
-          <span>{project.category}</span>
-          <h3>{project.title}</h3>
+          <span>学习路径</span>
+          <h3>{session.topic}</h3>
         </div>
       </div>
 
-      <ProjectPreview tone={project.tone} />
+      <ProjectPreview tone={meta.tone} />
 
       <div className="recent-card__footer">
         <div
           className="pixel-progress"
-          aria-label={`学习进度 ${project.progress}/9`}
+          aria-label={`学习进度 ${session.completedNodes}/${session.nodeCount}`}
         >
-          {Array.from({ length: 9 }, (_, index) => (
-            <i className={index < project.progress ? 'is-filled' : ''} key={index} />
+          {Array.from({ length: PROGRESS_SEGMENTS }, (_, index) => (
+            <i
+              className={index < filledSegments ? 'is-filled' : ''}
+              key={index}
+            />
           ))}
         </div>
-        <button className="continue-button pixel-press" type="button" onClick={onContinue}>
+        <button
+          className="continue-button pixel-press"
+          type="button"
+          onClick={onContinue}
+        >
           继续
           <PixelIcon name="arrow" />
         </button>
@@ -94,6 +127,8 @@ function RecentProjectCard({
 export function HomeView({
   onStartLearning,
   isStarting,
+  recentSessions,
+  onContinueSession,
 }: HomeViewProps) {
   const [topic, setTopic] = useState('')
 
@@ -154,18 +189,25 @@ export function HomeView({
               <span className="eyebrow">CONTINUE EXPLORING</span>
               <h2 id="recent-title">最近学习</h2>
             </div>
-            <span>3 条正在生长的知识路径</span>
+            <span>{recentSessions.length} 条正在生长的知识路径</span>
           </div>
 
-          <div className="recent-grid">
-            {RECENT_PROJECTS.map((project) => (
-              <RecentProjectCard
-                key={project.id}
-                project={project}
-                onContinue={() => onStartLearning(project.title)}
-              />
-            ))}
-          </div>
+          {recentSessions.length > 0 ? (
+            <div className="recent-grid">
+              {recentSessions.map((session, index) => (
+                <RecentSessionCard
+                  key={session.id}
+                  session={session}
+                  meta={metaForIndex(index)}
+                  onContinue={() => onContinueSession(session.id)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="recent-empty">
+              还没有学习会话，从上面的输入框开始你的第一课。
+            </div>
+          )}
         </section>
 
         <button

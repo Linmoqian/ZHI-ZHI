@@ -1,4 +1,4 @@
-import type { NodeTone } from '../shared/contracts'
+import type {} from '../shared/contracts'
 
 export type {
   CanvasPosition,
@@ -8,7 +8,10 @@ export type {
   MessageRole,
   NodeStatus,
   NodeTone,
+  SessionSummary,
 } from '../shared/contracts'
+
+export type { PixelIconName } from './components/PixelIcon'
 
 export type AppView = 'home' | 'workspace'
 
@@ -16,15 +19,7 @@ export type WorkspacePanel = 'map' | 'conversation'
 
 export type NodeAction =
   | 'create-branch'
+  | 'clone-branch'
   | 'merge-parent'
   | 'return-parent'
   | 'mark-mastered'
-
-export type RecentProject = {
-  id: string
-  title: string
-  category: string
-  tone: Exclude<NodeTone, 'gray'>
-  icon: 'brain' | 'leaf' | 'atom'
-  progress: number
-}

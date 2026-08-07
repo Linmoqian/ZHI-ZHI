@@ -26,6 +26,7 @@ import type {
   LearningNode,
   Message,
   NodeAction,
+  SessionSummary,
   WorkspacePanel,
 } from './types'
 
@@ -53,12 +54,28 @@ function App() {
     useState<WorkspacePanel>('conversation')
   const [isSessionStarting, setIsSessionStarting] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [recentSessions, setRecentSessions] = useState<SessionSummary[]>([])
   const [toast, setToast] = useState('')
 
   const currentNode = useMemo(
     () => nodes.find((node) => node.id === currentNodeId) ?? nodes[0],
     [currentNodeId, nodes],
   )
+
+  // 拉取真实会话列表填充“最近学习”。
+  const refreshSessions = useCallback(async () => {
+    try {
+      const { sessions } = await learningApi.listSessions()
+      setRecentSessions(sessions)
+    } catch {
+      // 后端不可用时保留空列表，由后续操作兜底提示。
+      setRecentSessions([])
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshSessions()
+  }, [refreshSessions])
 
   useEffect(() => {
     if (!toast) {
@@ -116,13 +133,45 @@ function App() {
           sessionId: session.id,
           topic: session.topic,
         })
+        void refreshSessions()
       } catch (error) {
         showApiError(error)
       } finally {
         setIsSessionStarting(false)
       }
     },
-    [isSessionStarting, showApiError],
+    [isSessionStarting, refreshSessions, showApiError],
+  )
+
+  const resumeSession = useCallback(
+    async (sessionIdToResume: string) => {
+      setView('workspace')
+      try {
+        const { session } = await learningApi.getSession(sessionIdToResume)
+        const activeNode =
+          session.nodes.find((node) => node.status === 'current') ??
+          session.nodes[0]
+
+        setSessionId(session.id)
+        setTopic(session.topic)
+        setNodes(session.nodes)
+        setMessages(session.messages)
+        setCurrentNodeId(activeNode?.id ?? '')
+        setCurrentPanel('conversation')
+        setIsGenerating(false)
+        emitDebugEvent('view:change', {
+          view: 'workspace',
+          source: 'resume-session',
+          sessionId: session.id,
+          topic: session.topic,
+        })
+      } catch (error) {
+        // 会话已不存在或后端不可用时回到首页并提示。
+        setView('home')
+        showApiError(error)
+      }
+    },
+    [showApiError],
   )
 
   const goWorkspace = useCallback(() => {
@@ -209,6 +258,12 @@ function App() {
           result.userMessage,
           result.assistantMessage,
         ])
+        // 后端基于本轮输入重新概括了节点 summary，同步刷新地图与学习目标。
+        if (result.updatedNode) {
+          setNodes((currentNodes) =>
+            replaceNode(currentNodes, result.updatedNode!),
+          )
+        }
         emitDebugEvent('context:compiled', {
           nodeId: targetNodeId,
           ...result.contextTrace,
@@ -262,6 +317,44 @@ function App() {
           nodeId: result.node.id,
           parentId: result.node.parentId,
           contextMode: result.node.contextMode,
+        })
+      } catch (error) {
+        showApiError(error)
+      }
+    },
+    [sessionId, showApiError, showToast],
+  )
+
+  const cloneBranch = useCallback(
+    async (nodeId: string) => {
+      if (!sessionId) {
+        showToast('请先创建学习会话')
+        return
+      }
+
+      try {
+        const result = await learningApi.cloneBranch(sessionId, nodeId)
+        setNodes((currentNodes) => [
+          ...currentNodes.map((node) => {
+            if (node.id === result.sourceNode.id) {
+              return result.sourceNode
+            }
+            return node.status === 'current'
+              ? { ...node, status: 'exploring' as const }
+              : node
+          }),
+          result.node,
+        ])
+        setMessages((currentMessages) => [
+          ...currentMessages,
+          result.message,
+        ])
+        setCurrentNodeId(result.node.id)
+        setCurrentPanel('conversation')
+        showToast('已克隆出新的分支，继续深入')
+        emitDebugEvent('node:clone', {
+          nodeId: result.node.id,
+          parentId: result.node.parentId,
         })
       } catch (error) {
         showApiError(error)
@@ -395,6 +488,8 @@ function App() {
     (nodeId: string, action: NodeAction) => {
       if (action === 'create-branch') {
         void createBranch(nodeId)
+      } else if (action === 'clone-branch') {
+        void cloneBranch(nodeId)
       } else if (action === 'merge-parent') {
         void mergeToParent(nodeId)
       } else if (action === 'return-parent') {
@@ -403,7 +498,7 @@ function App() {
         void markMastered(nodeId)
       }
     },
-    [createBranch, markMastered, mergeToParent, returnToParent],
+    [cloneBranch, createBranch, markMastered, mergeToParent, returnToParent],
   )
 
   return (
@@ -417,8 +512,12 @@ function App() {
       {view === 'home' ? (
         <HomeView
           isStarting={isSessionStarting}
+          recentSessions={recentSessions}
           onStartLearning={(nextTopic) => {
             void startLearning(nextTopic)
+          }}
+          onContinueSession={(sessionIdToResume) => {
+            void resumeSession(sessionIdToResume)
           }}
         />
       ) : (

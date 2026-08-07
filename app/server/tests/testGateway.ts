@@ -9,5 +9,8 @@ export function createFakeGateway(reply = '测试回复'): ModelGateway {
     complete(_input: ModelInput): Promise<string> {
       return Promise.resolve(reply)
     },
+    summarize(_content: string): Promise<string> {
+      return Promise.resolve(reply)
+    },
   }
 }

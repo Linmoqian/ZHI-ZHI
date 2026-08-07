@@ -99,6 +99,63 @@ test('HTTP 上下文接口不泄漏同级分支消息', async () => {
   })
 })
 
+test('HTTP 会话列表接口返回真实创建的会话', async () => {
+  await withApi(async (baseUrl) => {
+    const emptyResponse = await fetch(`${baseUrl}/api/sessions`)
+    assert.equal(emptyResponse.status, 200)
+    assert.deepEqual(await emptyResponse.json(), { sessions: [] })
+
+    const created = await postJson<CreateSessionResponse>(
+      `${baseUrl}/api/sessions`,
+      { topic: '列表接口会话' },
+    )
+
+    const listResponse = await fetch(`${baseUrl}/api/sessions`)
+    const listBody = (await listResponse.json()) as {
+      sessions: Array<{ id: string; topic: string }>
+    }
+    assert.equal(listBody.sessions.length, 1)
+    assert.equal(listBody.sessions[0].id, created.body.session.id)
+    assert.equal(listBody.sessions[0].topic, '列表接口会话')
+  })
+})
+
+test('HTTP 克隆接口创建继承上下文的克隆分支', async () => {
+  await withApi(async (baseUrl) => {
+    const sessionResult = await postJson<CreateSessionResponse>(
+      `${baseUrl}/api/sessions`,
+      { topic: 'HTTP 克隆验证' },
+    )
+    const sessionId = sessionResult.body.session.id
+
+    await postJson<SendMessageResponse>(
+      `${baseUrl}/api/sessions/${sessionId}/nodes/self-attention/messages`,
+      { content: '克隆前的内容 161616' },
+    )
+    const cloneResult = await postJson<CreateBranchResponse>(
+      `${baseUrl}/api/sessions/${sessionId}/nodes/self-attention/clone`,
+      {},
+    )
+
+    assert.equal(cloneResult.response.status, 201)
+    assert.equal(cloneResult.body.node.parentId, 'self-attention')
+    assert.equal(cloneResult.body.node.contextMode, 'inherit')
+
+    const contextResponse = await fetch(
+      `${baseUrl}/api/sessions/${sessionId}/nodes/${cloneResult.body.node.id}/context`,
+    )
+    const contextBody = (await contextResponse.json()) as {
+      context: { inherited: boolean; messages: Array<{ content: string }> }
+    }
+    assert.equal(contextBody.context.inherited, true)
+    assert.ok(
+      contextBody.context.messages.some((m) =>
+        m.content.includes('克隆前的内容 161616'),
+      ),
+    )
+  })
+})
+
 test('HTTP 接口支持解锁与知识地图', async () => {
   await withApi(async (baseUrl) => {
     const sessionResult = await postJson<CreateSessionResponse>(

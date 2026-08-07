@@ -1,7 +1,9 @@
 import type {
   ContextMode,
+  CloneBranchResponse,
   CreateBranchResponse,
   CreateSessionResponse,
+  ListSessionsResponse,
   MergeBranchResponse,
   NodeStatus,
   SendMessageResponse,
@@ -29,6 +31,19 @@ export const learningApi = {
     })
   },
 
+  listSessions() {
+    return request<ListSessionsResponse>('/api/sessions', {
+      method: 'GET',
+    })
+  },
+
+  getSession(sessionId: string) {
+    return request<CreateSessionResponse>(
+      `/api/sessions/${sessionId}`,
+      { method: 'GET' },
+    )
+  },
+
   createBranch(
     sessionId: string,
     sourceNodeId: string,
@@ -40,6 +55,13 @@ export const learningApi = {
         method: 'POST',
         body: JSON.stringify({ contextMode }),
       },
+    )
+  },
+
+  cloneBranch(sessionId: string, sourceNodeId: string) {
+    return request<CloneBranchResponse>(
+      `/api/sessions/${sessionId}/nodes/${sourceNodeId}/clone`,
+      { method: 'POST' },
     )
   },
 

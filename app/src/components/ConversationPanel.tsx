@@ -138,24 +138,47 @@ export function ConversationPanel({
         </div>
 
         {messages.length > 0 ? (
-          messages.map((message) => (
-            <article className={`message message--${message.role}`} key={message.id}>
-              <span className="message__avatar">
-                {message.role === 'assistant' ? (
-                  <PixelIcon name="branch" />
-                ) : (
-                  '你'
-                )}
-              </span>
-              <div className="message__body">
-                <div className="message__meta">
-                  <strong>{message.role === 'assistant' ? '知枝' : '你'}</strong>
-                  <span>{message.createdAt}</span>
-                </div>
-                <p>{message.content}</p>
+          messages.map((message, messageIndex) => {
+            const isRoundEnd = message.role === 'assistant' && messageIndex < messages.length - 1
+            return (
+              <div className="message-round" key={message.id}>
+                <article
+                  className={`message message--${message.role}`}
+                >
+                  <span className="message__avatar">
+                    {message.role === 'assistant' ? (
+                      <PixelIcon name="branch" />
+                    ) : (
+                      '你'
+                    )}
+                  </span>
+                  <div className="message__body">
+                    <div className="message__meta">
+                      <strong>{message.role === 'assistant' ? '知枝' : '你'}</strong>
+                      <span>{message.createdAt}</span>
+                    </div>
+                    <p>{message.content}</p>
+                  </div>
+                </article>
+                {isRoundEnd ? (
+                  <div className="round-divider" aria-label="对话回合分隔线">
+                    <span className="round-divider__rule" />
+                    <button
+                      type="button"
+                      className="round-clone-button"
+                      disabled={isGenerating}
+                      title="从这里克隆出一条新分支继续深入"
+                      onClick={() => onNodeAction(node.id, 'clone-branch')}
+                    >
+                      <PixelIcon name="branch" />
+                      克隆此分支继续深入
+                    </button>
+                    <span className="round-divider__rule" />
+                  </div>
+                ) : null}
               </div>
-            </article>
-          ))
+            )
+          })
         ) : (
           <div className="conversation-empty">
             <PixelIcon name="book" />

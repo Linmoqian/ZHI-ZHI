@@ -2,6 +2,7 @@ export type DebugEventName =
   | 'view:change'
   | 'node:select'
   | 'node:create'
+  | 'node:clone'
   | 'node:update'
   | 'node:merge'
   | 'message:send'

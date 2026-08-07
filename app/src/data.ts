@@ -1,33 +1,6 @@
-import type { LearningNode, Message, RecentProject } from './types'
+import type { LearningNode, Message } from './types'
 
 export const DEFAULT_TOPIC = 'Transformer 为什么需要注意力机制？'
-
-export const RECENT_PROJECTS: RecentProject[] = [
-  {
-    id: 'transformer',
-    title: 'Transformer 为什么需要注意力机制？',
-    category: '人工智能',
-    tone: 'blue',
-    icon: 'brain',
-    progress: 7,
-  },
-  {
-    id: 'neural-network',
-    title: '神经网络是如何学会识别的？',
-    category: '机器学习',
-    tone: 'green',
-    icon: 'leaf',
-    progress: 5,
-  },
-  {
-    id: 'quantum',
-    title: '量子世界的基本规则是什么？',
-    category: '现代物理',
-    tone: 'purple',
-    icon: 'atom',
-    progress: 6,
-  },
-]
 
 const topicLabel = (topic: string) =>
   topic.length > 18 ? `${topic.slice(0, 18)}…` : topic

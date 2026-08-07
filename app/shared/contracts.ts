@@ -59,10 +59,30 @@ export type CreateBranchResponse = {
   message: Message
 }
 
+export type CloneBranchResponse = {
+  node: LearningNode
+  sourceNode: LearningNode
+  message: Message
+}
+
+export type SessionSummary = {
+  id: string
+  topic: string
+  createdAt: string
+  nodeCount: number
+  completedNodes: number
+}
+
+export type ListSessionsResponse = {
+  sessions: SessionSummary[]
+}
+
 export type SendMessageResponse = {
   userMessage: Message
   assistantMessage: Message
   contextTrace: ContextTrace
+  /** 发送消息后更新的节点（如 summary 已重新概括）。 */
+  updatedNode?: LearningNode
 }
 
 export type UpdateNodeResponse = {

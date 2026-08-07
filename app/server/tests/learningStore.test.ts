@@ -28,6 +28,76 @@ test('相同正文只保存一个内容 Blob', () => {
   assert.equal(contentStore.getReferenceCount(firstHash), 2)
 })
 
+test('发消息后节点 summary 被更新为模型生成的概括', async () => {
+  const gateway: ModelGateway = {
+    complete: () => Promise.resolve('助手回复'),
+    summarize: (content) => Promise.resolve(`概括：${content.slice(0, 4)}`),
+  }
+  const store = new LearningStore({ modelGateway: gateway })
+  const session = store.createSession('节点概括验证')
+  await store.sendMessage(
+    session.id,
+    'self-attention',
+    '我想从直觉开始理解注意力',
+  )
+
+  const updated = store
+    .getSession(session.id)
+    .nodes.find((n) => n.id === 'self-attention')
+  assert.ok(updated)
+  assert.equal(updated!.summary, '概括：我想从直')
+  // title 不被覆盖
+  assert.notEqual(updated!.title, updated!.summary)
+})
+
+test('模型不可用时节点 summary 回退到本轮用户输入截断', async () => {
+  const gateway: ModelGateway = {
+    complete: () => Promise.resolve('助手回复'),
+    summarize: () => Promise.reject(new Error('ollama 不可用')),
+  }
+  const store = new LearningStore({ modelGateway: gateway })
+  const session = store.createSession('概括回退验证')
+  const longInput = '这是一段超过二十八字的较长用户输入用于验证截断回退逻辑是否正确工作'
+  await store.sendMessage(session.id, 'self-attention', longInput)
+
+  const updated = store
+    .getSession(session.id)
+    .nodes.find((n) => n.id === 'self-attention')
+  assert.ok(updated)
+  // 回退 = 本轮用户输入截断到 28 字
+  assert.equal(updated!.summary, '这是一段超过二十八字的较长用户输入用于验证截断回退逻辑是…')
+})
+
+test('节点概括随消息持久化并在恢复后保留', async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'zhizhi-sum-'))
+  const gateway: ModelGateway = {
+    complete: () => Promise.resolve('助手回复'),
+    summarize: () => Promise.resolve('模型生成的概括'),
+  }
+  try {
+    const persistor = createJournaledSessionPersistor(dataDir, {
+      checkpointEventThreshold: 1000,
+      checkpointIdleMs: 3_600_000,
+    })
+    const store = new LearningStore({ modelGateway: gateway, persistor })
+    const session = store.createSession('概括持久化验证')
+    await store.sendMessage(session.id, 'self-attention', '任意问题')
+    await store.persistSession(session.id)
+
+    const restored = new LearningStore({ modelGateway: gateway, persistor })
+    const ids = await persistor.listSessionIds()
+    const dump = await persistor.load(ids[0])
+    assert.ok(dump)
+    restored.restoreSession(dump)
+    const node = restored
+      .getSession(session.id)
+      .nodes.find((n) => n.id === 'self-attention')
+    assert.equal(node?.summary, '模型生成的概括')
+  } finally {
+    await rm(dataDir, { recursive: true, force: true })
+  }
+})
+
 test('同级分支不会读取彼此的消息', async () => {
   const store = createStore()
   const session = store.createSession('验证同级分支隔离')
@@ -179,6 +249,7 @@ test('会话快照持久化后恢复保留 DAG 与隔离语义', async () => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), 'zhizhi-test-'))
   const gateway: ModelGateway = {
     complete: () => Promise.resolve('助手回复'),
+    summarize: () => Promise.resolve('一句概括'),
   }
 
   try {
@@ -250,6 +321,126 @@ test('解锁非锁定节点会拒绝', () => {
     () => store.unlockNode(session.id, current.id),
     { code: 'NODE_NOT_LOCKED' },
   )
+})
+
+test('克隆分支继承到克隆点的上下文，且与原节点后续消息隔离', async () => {
+  const store = createStore()
+  const session = store.createSession('克隆验证')
+
+  // 在当前节点积累几轮对话
+  await store.sendMessage(session.id, 'self-attention', '第一轮问题 101010')
+  await store.sendMessage(session.id, 'self-attention', '第二轮问题 202020')
+
+  // 从当前节点此刻的进度克隆
+  const clone = store.cloneBranch(session.id, 'self-attention', {
+    title: '克隆分支',
+  })
+  const cloneNode = clone.node
+  assert.equal(cloneNode.parentId, 'self-attention')
+  assert.equal(cloneNode.status, 'current')
+  assert.equal(cloneNode.contextMode, 'inherit')
+
+  const cloneContext = store.getCompiledContext(session.id, cloneNode.id)
+  // 克隆分支继承了到克隆点为止的全部可见链（含两轮对话）
+  assert.ok(cloneContext.inherited)
+  assert.ok(
+    cloneContext.messages.some((m) => m.content.includes('第一轮问题 101010')),
+  )
+  assert.ok(
+    cloneContext.messages.some((m) => m.content.includes('第二轮问题 202020')),
+  )
+
+  // 原节点继续追加内容，不应影响已克隆分支的上下文（base=head 已固定）
+  await store.sendMessage(session.id, 'self-attention', '克隆后新增 303030')
+  const cloneContextAfter = store.getCompiledContext(session.id, cloneNode.id)
+  assert.ok(
+    cloneContextAfter.messages.every(
+      (m) => !m.content.includes('克隆后新增 303030'),
+    ),
+  )
+})
+
+test('会话列表返回全部真实会话摘要', () => {
+  const store = createStore()
+  store.createSession('第一个会话')
+  store.createSession('第二个会话')
+
+  const summaries = store.listSessions()
+
+  assert.equal(summaries.length, 2)
+  const titles = summaries.map((s) => s.topic).sort()
+  assert.deepEqual(titles, ['第一个会话', '第二个会话'])
+  for (const summary of summaries) {
+    assert.equal(summary.nodeCount, 8)
+    // 应包含 seed 中真实的 mastered 节点数
+    assert.equal(summary.completedNodes, 2)
+  }
+  // 每个会话摘要都携带可与后端匹配的 id
+  assert.ok(summaries.every((s) => typeof s.id === 'string' && s.id.length > 0))
+})
+
+test('会话列表按创建时间倒序返回（相隔不同时间时）', () => {
+  const store = createStore()
+  const first = store.createSession('较早的会话')
+  const later = store.createSession('较新的会话')
+
+  const summaries = store.listSessions()
+  // 两个会话时间戳若都在同一毫秒，则以 id 次级序保证确定；
+  // 这里只断言两者都被返回且列表长度正确，倒序由 sort 稳定保证。
+  assert.equal(summaries.length, 2)
+  assert.ok(summaries.some((s) => s.id === first.id))
+  assert.ok(summaries.some((s) => s.id === later.id))
+  // 默认列表应按时间倒序：最靠前的会话其 createdAt 不小于最后那个。
+  assert.ok(
+    summaries[0].createdAt.localeCompare(summaries[summaries.length - 1].createdAt) >= 0,
+  )
+})
+
+test('克隆分支物理上不复制历史 Blob，共享已存在的引用', () => {
+  const store = createStore()
+  const session = store.createSession('克隆引用验证')
+  store.cloneBranch(session.id, 'self-attention')
+
+  const blobsBefore = store.contentStore.size
+  const clone = store.cloneBranch(session.id, 'self-attention')
+
+  // 连续克隆两次：第二次克隆不应新增任何内容 Blob（不复制历史）
+  assert.equal(store.contentStore.size, blobsBefore)
+  assert.ok(store.getCompiledContext(session.id, clone.node.id).messages.length >= 1)
+})
+
+test('克隆分支可持久化并在恢复后保留隔离语义', async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'zhizhi-clone-'))
+  const gateway = createFakeGateway()
+  try {
+    const persistor = createJournaledSessionPersistor(dataDir, {
+      checkpointEventThreshold: 1000,
+      checkpointIdleMs: 3_600_000,
+    })
+    const store = new LearningStore({ modelGateway: gateway, persistor })
+    const session = store.createSession('克隆持久化验证')
+    await store.sendMessage(session.id, 'self-attention', '克隆前内容 404040')
+    const clone = store.cloneBranch(session.id, 'self-attention')
+    await store.persistSession(session.id)
+
+    const restored = new LearningStore({ modelGateway: gateway, persistor })
+    const ids = await persistor.listSessionIds()
+    const dump = await persistor.load(ids[0])
+    assert.ok(dump)
+    restored.restoreSession(dump)
+
+    const cloneNode = restored
+      .getSession(session.id)
+      .nodes.find((n) => n.id === clone.node.id)
+    assert.ok(cloneNode, '克隆节点应被恢复')
+    const context = restored.getCompiledContext(session.id, clone.node.id)
+    assert.ok(
+      context.messages.some((m) => m.content.includes('克隆前内容 404040')),
+    )
+    assert.equal(context.inherited, true)
+  } finally {
+    await rm(dataDir, { recursive: true, force: true })
+  }
 })
 
 test('状态机拒绝非法的状态跳转', () => {

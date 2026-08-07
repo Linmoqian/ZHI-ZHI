@@ -64,6 +64,16 @@ export function createApiHandler(store = new LearningStore()) {
         return
       }
 
+      if (
+        request.method === 'GET' &&
+        segments.length === 2 &&
+        segments[0] === 'api' &&
+        segments[1] === 'sessions'
+      ) {
+        sendJson(response, 200, { sessions: store.listSessions() })
+        return
+      }
+
       const isSessionRoute =
         segments[0] === 'api' &&
         segments[1] === 'sessions' &&
@@ -115,6 +125,23 @@ export function createApiHandler(store = new LearningStore()) {
         )
         await store.persistSession(segments[2])
         sendJson(response, 201, branchResult)
+        return
+      }
+
+      if (
+        isNodeRoute &&
+        request.method === 'POST' &&
+        segments[5] === 'clone' &&
+        segments.length === 6
+      ) {
+        const body = await readJson(request)
+        const cloneResult = store.cloneBranch(
+          segments[2],
+          segments[4],
+          toCreateBranchInput(body),
+        )
+        await store.persistSession(segments[2])
+        sendJson(response, 201, cloneResult)
         return
       }
 

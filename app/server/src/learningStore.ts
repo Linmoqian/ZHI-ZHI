@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type {
   CanvasPosition,
+  CloneBranchResponse,
   ContextMode,
   ContextTrace,
   CreateBranchResponse,
@@ -12,6 +13,7 @@ import type {
   NodeStatus,
   NodeTone,
   SendMessageResponse,
+  SessionSummary,
   UpdateNodeResponse,
 } from '../../shared/contracts.ts'
 import { compileBranchContext } from './contextCompiler.ts'
@@ -152,6 +154,28 @@ export class LearningStore {
     return this.toSnapshot(this.requireSession(sessionId))
   }
 
+  /** 返回所有会话的轻量摘要，按创建时间倒序（最近优先）。 */
+  listSessions(): SessionSummary[] {
+    const summaries: SessionSummary[] = []
+    for (const session of this.sessions.values()) {
+      const completedNodes = [...session.nodes.values()].filter(
+        (node) => node.status === 'mastered' || node.status === 'merged',
+      ).length
+      summaries.push({
+        id: session.id,
+        topic: session.topic,
+        createdAt: session.createdAt,
+        nodeCount: session.nodes.size,
+        completedNodes,
+      })
+    }
+    return summaries.sort((a, b) => {
+      // 主键按创建时间倒序；时间相同时用 id 作为稳定次级序，保证结果确定。
+      const timeOrder = b.createdAt.localeCompare(a.createdAt)
+      return timeOrder !== 0 ? timeOrder : b.id.localeCompare(a.id)
+    })
+  }
+
   createBranch(
     sessionId: string,
     sourceNodeId: string,
@@ -230,6 +254,107 @@ export class LearningStore {
         node,
         branch,
         initialMessage: session.messages.get(message.id)!, 
+        initialContent: this.contentStore.get(
+          session.messages.get(message.id)!.contentHash,
+        ),
+        createdAt: session.createdAt,
+      },
+    ])
+
+    return {
+      node: { ...node },
+      sourceNode: { ...this.requireNode(session, sourceNodeId) },
+      message,
+    }
+  }
+
+  /**
+   * 克隆分支：在当前节点的对话位置原地叉出一根继承同样的新分支（O(1) 指针 fork）。
+   *
+   * 与 createBranch 的区别：createBranch 从父节点的 HEAD 岔出；克隆则锚定到
+   * 当前节点自身的 HEAD，即“读到这里，从这里换一根线索继续深入”。克隆分支
+   * 继承当前已读到的上下文（inherit 模式、base=head），因此会保留到该轮为止的
+   * 全部可见链，但不会受当前节点之后新增内容的影响，也不会复制任何历史 Blob。
+   */
+  cloneBranch(
+    sessionId: string,
+    sourceNodeId: string,
+    input: CreateBranchInput = {},
+  ): CloneBranchResponse {
+    const session = this.requireSession(sessionId)
+    const sourceNode = this.requireNode(session, sourceNodeId)
+    const sourceBranch = this.requireBranch(session, sourceNodeId)
+
+    if (sourceNode.status === 'locked') {
+      throw new ApiError(409, 'NODE_LOCKED', '待解锁节点不能克隆分支')
+    }
+    if (
+      input.contextMode !== undefined &&
+      input.contextMode !== 'inherit' &&
+      input.contextMode !== 'isolated'
+    ) {
+      throw new ApiError(400, 'INVALID_CONTEXT_MODE', '上下文模式无效')
+    }
+
+    const siblings = [...session.nodes.values()].filter(
+      (node) => node.parentId === sourceNode.id,
+    )
+    const branchNumber = siblings.length + 1
+    const horizontalDirection = siblings.length % 2 === 0 ? -1 : 1
+    const nodeId = `branch-${randomUUID()}`
+    const tone = branchTones[siblings.length % branchTones.length]
+    // 克隆固定为继承模式：保留到克隆点为止的整个上下文，且 base=head
+    // 使得克隆分支在此刻的进度上独立生根，不受原节点后续消息影响。
+    const contextMode = input.contextMode ?? 'inherit'
+    const node: LearningNode = {
+      id: nodeId,
+      parentId: sourceNode.id,
+      title: input.title?.trim() || `从此刻继续的分支 ${branchNumber}`,
+      summary: `克隆自“${sourceNode.title}”此刻的进度，继续向另一个方向深入。`,
+      status: 'current',
+      tone,
+      position: {
+        x:
+          sourceNode.position.x -
+          horizontalDirection * (136 + siblings.length * 20),
+        y: sourceNode.position.y + 172,
+      },
+      contextMode,
+    }
+    const branch: BranchRecord = {
+      id: nodeId,
+      parentBranchId: sourceNode.id,
+      // base = 当前节点 HEAD，克隆继承到这一轮；head 同步为同一点。
+      baseMessageId: sourceBranch.headMessageId,
+      headMessageId: sourceBranch.headMessageId,
+      contextMode,
+    }
+
+    session.nodes.forEach((currentNode, currentNodeId) => {
+      if (currentNode.status === 'current') {
+        session.nodes.set(currentNodeId, {
+          ...currentNode,
+          status: 'exploring',
+        })
+      }
+    })
+    session.nodes.set(node.id, node)
+    session.branches.set(branch.id, branch)
+
+    const message = this.appendMessage(
+      session,
+      node.id,
+      'assistant',
+      '已从这里克隆出一根新的分支。它继承了到此刻为止的全部上下文，之后可以放心往另一个方向深入，不会影响原节点接下来继续你的主线。',
+    )
+
+    this.recordEvents(sessionId, [
+      {
+        type: 'branch_created',
+        sessionId,
+        node,
+        branch,
+        initialMessage: session.messages.get(message.id)!,
         initialContent: this.contentStore.get(
           session.messages.get(message.id)!.contentHash,
         ),
@@ -397,11 +522,65 @@ export class LearningStore {
       },
     ])
 
+    // 基于本轮用户输入生成一句话概括并更新节点 summary（title 保持不变）。
+    // 概括用独立系统提示词通模型生成；不可用时回退到本轮用户输入截断。
+    const updatedNode = await this.updateNodeSummary(
+      sessionId,
+      nodeId,
+      normalizedContent,
+    )
+
     return {
       userMessage,
       assistantMessage,
       contextTrace: toContextTrace(compiledContext),
+      ...(updatedNode ? { updatedNode } : {}),
     }
+  }
+
+  /**
+   * 用一句话概括用户在本节点的输入并更新节点 summary。
+   * 优先调用模型（独立系统提示词）；失败时回退到本轮用户输入截断。
+   * 返回更新后的节点（未变化时返回 null）。
+   */
+  private async updateNodeSummary(
+    sessionId: string,
+    nodeId: string,
+    latestUserInput: string,
+  ): Promise<LearningNode | null> {
+    const session = this.requireSession(sessionId)
+    const node = this.requireNode(session, nodeId)
+    const branch = this.requireBranch(session, nodeId)
+
+    // 概括针对本轮用户输入；模型不可用时回退到本轮输入截断。
+    const fallback = truncateToLine(latestUserInput)
+
+    let summary: string
+    try {
+      summary = await this.modelGateway.summarize(latestUserInput)
+      if (!summary.trim()) {
+        summary = fallback
+      }
+    } catch {
+      // 模型不可用或生成失败时，回退到本轮用户输入截断。
+      summary = fallback
+    }
+
+    if (summary === node.summary) {
+      return null
+    }
+
+    const updatedNode: LearningNode = { ...node, summary }
+    session.nodes.set(nodeId, updatedNode)
+    this.recordEvents(sessionId, [
+      {
+        type: 'node_updated',
+        sessionId,
+        node: updatedNode,
+        branch,
+      },
+    ])
+    return updatedNode
   }
 
   mergeBranch(
@@ -614,6 +793,12 @@ function createDefaultGateway(): ModelGateway {
   return createOllamaGateway({
     model: resolveModelFromEnv(process.env),
   })
+}
+
+/** 将用户输入截断为一句可读的概括回退文案。 */
+function truncateToLine(text: string): string {
+  const compact = text.replace(/\s+/g, ' ').trim()
+  return compact.length > 28 ? `${compact.slice(0, 28)}…` : compact
 }
 
 function createLocalResponse(
