@@ -43,7 +43,6 @@ export function SplitPane({
 }: SplitPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const leftRef = useRef<HTMLDivElement>(null)
-  const [isHovering, setIsHovering] = useState(false)
   const [isSwapped, setIsSwapped] = useState(false)
   /** 是否正在拖拽宽度（用于禁用 layout 动画 + 切换 handle 样式）。 */
   const [isResizing, setIsResizing] = useState(false)
@@ -229,15 +228,13 @@ export function SplitPane({
         <div className="split-pane__handle-slot" style={{ order: 2 }}>
           <button
             type="button"
-            className={`split-pane__handle ${isHovering ? 'is-hover' : ''} ${
+            className={`split-pane__handle ${
               isResizing ? 'is-dragging' : ''
             }`}
             aria-label="拖拽调整宽度，双击隐藏左栏"
             title="拖拽调整宽度 · 双击隐藏"
             onPointerDown={handleResizePointerDown}
             onDoubleClick={onToggleLeft}
-            onMouseEnter={() => setIsHovering(true)}
-            onMouseLeave={() => setIsHovering(false)}
           >
             <span className="split-pane__grip" />
           </button>

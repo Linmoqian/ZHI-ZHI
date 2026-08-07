@@ -1103,12 +1103,6 @@
     width 0.15s ease;
 }
 
-.split-pane__handle.is-hover::before {
-  background: var(--blue);
-  height: 56px;
-  width: 5px;
-}
-
 .split-pane__handle.is-dragging::before {
   background: var(--blue-dark);
   height: 80%;
@@ -1117,6 +1111,12 @@
 @media (hover: hover) and (pointer: fine) {
   .split-pane__handle:hover {
     background: rgba(74, 122, 200, 0.06);
+  }
+
+  .split-pane__handle:hover::before {
+    background: var(--blue);
+    height: 56px;
+    width: 5px;
   }
 }
 
