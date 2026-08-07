@@ -93,6 +93,20 @@ Tauri 桌面窗口（无边框 + 自定义标题栏）
 
 ### Phase 1 — sidecar 生产化与进程托管（1~2 天）
 
+> **已完成（v0.1.0）**：Node 后端以官方 externalBin 机制打包为 sidecar 随安装包分发，
+> Rust 壳在 production 构建通过 `tauri-plugin-shell` 拉起，数据写入各平台 `app_data_dir`。
+> 实现：
+> - `app/scripts/build-server.mjs`：把 `server` 与 better-sqlite3 原生依赖（含全平台 prebuilds）
+>   打包成自包含 `src-tauri/server/`，供 `resources` 引用。
+> - `app/scripts/prepare-node-sidecar.mjs`：把当前平台 node 复制为 `binaries/node-<triple>`。
+> - `tauri.conf.json`：`"resources":["server"]`、`"externalBin":["binaries/node"]`，
+>   `beforeBuildCommand: "npm run build:desktop"`（sidecar + server + 前端一次完成）。
+> - `lib.rs`：release 下用 `shell().sidecar("node").arg("server.js")` +
+>   `.current_dir(resource/server)` 启动，注入 `ZHIZHI_DATA_DIR=app_data_dir`
+>   （外部 `ZHIZHI_DATA_DIR` 覆盖优先）与 `ZHIZHI_HOST/PORT`；转发后端日志，进程退出时提示。
+> - capabilities 不开放 shell 给前端（Rust 侧 spawn 不经 scope），保持最小授权。
+> - debug(dev) 仍由 `scripts/dev.mjs` 管理后端，避免进程冲突。
+
 1. 评估 Node 运行时打包：将 Node 二进制 + 精简后的 `server/` 作为 Tauri sidecar；
    或用 `tauri-plugin-shell` 以参数化方式启动 `node`。
 2. capabilities 追加 shell / 外部进程权限，路径校验与最小授权。
@@ -129,7 +143,7 @@ Tauri 桌面窗口（无边框 + 自定义标题栏）
 | 里程碑 | 内容 | 预估 |
 | --- | --- | --- |
 | M0 | Tauri 薄壳 + 无边框窗口跑通，Node 后端经 HTTP 可用 | Phase 0 |
-| M1 | Node sidecar 生产化，桌面安装包可用 | Phase 1 |
+| M1 | Node sidecar 生产化，桌面安装包可用（v0.1.0 完成） | Phase 1 |
 | M2 | 桌面交互打磨，测试与文档齐备 | Phase 2 |
 
 总预估：2~4 个工作日（远小于全量 Rust 重写的 9~12 天）。

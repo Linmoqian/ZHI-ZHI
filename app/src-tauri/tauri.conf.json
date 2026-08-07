@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "npm run dev:desktop",
     "devUrl": "http://127.0.0.1:5173",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run build:desktop",
     "frontendDist": "../dist"
   },
   "app": {
@@ -29,6 +29,8 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "resources": ["server"],
+    "externalBin": ["binaries/node"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

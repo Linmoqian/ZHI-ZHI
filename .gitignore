@@ -37,3 +37,9 @@ lerna-debug.log*
 # Rust / Tauri 构建产物
 app/src-tauri/target/
 app/src-tauri/gen/schemas/
+
+# Node sidecar 二进制（各平台随 CI/本地准备重命名，不入库）
+app/src-tauri/binaries/
+
+# 后端构建产物（由 scripts/build-server.mjs 生成，装包时作为资源）
+app/src-tauri/server/
