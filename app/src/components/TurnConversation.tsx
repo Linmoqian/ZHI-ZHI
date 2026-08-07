@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type FormEvent,
@@ -31,9 +32,10 @@ export function TurnConversation({
   const [draft, setDraft] = useState('')
   const messageEndRef = useRef<HTMLDivElement>(null)
 
-  const visibleTurns = activeLeafId
-    ? pathFromRoot(turns, activeLeafId)
-    : []
+  const visibleTurns = useMemo(
+    () => (activeLeafId ? pathFromRoot(turns, activeLeafId) : []),
+    [turns, activeLeafId],
+  )
 
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ block: 'nearest' })
