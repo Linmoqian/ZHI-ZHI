@@ -233,6 +233,15 @@ export function TurnMap({
           <span className="eyebrow">CONVERSATION MAP</span>
           <h2>对话地图</h2>
         </div>
+        <span
+          className="panel-swap-handle"
+          role="button"
+          tabIndex={0}
+          aria-label="拖拽与对话面板互换位置"
+          title="拖拽互换位置"
+        >
+          <PixelIcon name="exchange" />
+        </span>
       </header>
 
       <div className="branch-canvas" data-testid="turn-map">

@@ -1009,14 +1009,42 @@
 }
 
 /* header 可拖拽互换面板：header 鼠标变为抓取手 */
-.panel-header,
-.conversation-header {
+/* 卡片互换拖拽手柄：header 中的「-」按钮，只有它可触发互换 */
+.panel-swap-handle {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  background: var(--surface);
+  font-weight: 700;
+  line-height: 1;
   cursor: grab;
+  user-select: none;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
 
-.panel-header:active,
-.conversation-header:active {
+.panel-swap-handle:hover {
+  color: var(--blue);
+  background: #eef4ff;
+  border-color: #c4d8f5;
+}
+
+.panel-swap-handle:active {
   cursor: grabbing;
+}
+
+.panel-swap-handle svg {
+  width: 12px;
+  height: 12px;
 }
 
 /* 拖拽放置目标：面板高亮提示可互换 */

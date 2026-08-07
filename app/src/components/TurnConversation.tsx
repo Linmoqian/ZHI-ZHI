@@ -81,6 +81,15 @@ export function TurnConversation({
           </div>
           <h2>{draftMode ? '新的对话' : '正在生长的支线'}</h2>
         </div>
+        <span
+          className="panel-swap-handle"
+          role="button"
+          tabIndex={0}
+          aria-label="拖拽与地图面板互换位置"
+          title="拖拽互换位置"
+        >
+          <PixelIcon name="exchange" />
+        </span>
       </header>
 
       <div

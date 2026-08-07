@@ -1,5 +1,6 @@
 import type { ComponentType, SVGProps } from 'react'
 import { ArrowRight } from 'pixelarticons/react/ArrowRight'
+import { ArrowsHorizontal } from 'pixelarticons/react/ArrowsHorizontal'
 import { ArrowUp } from 'pixelarticons/react/ArrowUp'
 import { ChartBarBig } from 'pixelarticons/react/ChartBarBig'
 import { Check } from 'pixelarticons/react/Check'
@@ -33,6 +34,7 @@ export type PixelIconName =
   | 'check'
   | 'chevron-left'
   | 'compass'
+  | 'exchange'
   | 'flag'
   | 'grid'
   | 'help'
@@ -60,6 +62,7 @@ const icons = {
   check: Check,
   'chevron-left': ChevronLeft,
   compass: MapPin,
+  exchange: ArrowsHorizontal,
   flag: Flag,
   grid: Grid3x3,
   help: LetterQCircle,

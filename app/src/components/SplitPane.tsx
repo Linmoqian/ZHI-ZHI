@@ -27,7 +27,8 @@ type Side = 'left' | 'right'
 const MIN_RATIO = 0.22
 const MAX_RATIO = 0.68
 const SWAP_DURATION = 0.4
-const HEADER_SELECTOR = '.panel-header, .conversation-header'
+/** 卡片互换拖拽手柄选择器：只有此元素可触发互换。 */
+const SWAP_HANDLE_SELECTOR = '.panel-swap-handle'
 
 export function SplitPane({
   left,
@@ -121,7 +122,7 @@ export function SplitPane({
   const handleCardPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>, side: Side) => {
       const target = event.target as HTMLElement
-      if (!target.closest(HEADER_SELECTOR)) {
+      if (!target.closest(SWAP_HANDLE_SELECTOR)) {
         return
       }
       if (target.closest('button, input, textarea, select, a')) {
