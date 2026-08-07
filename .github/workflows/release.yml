@@ -28,7 +28,9 @@ jobs:
 
       - name: 安装依赖（锁文件）
         working-directory: app
-        run: npm ci
+        # better-sqlite3 的原生模块随包分发 prebuilds，运行时直接加载，
+        # 无需 node-gyp 编译；跳过安装脚本避免 Windows 缺 MSVC 工具链失败。
+        run: npm ci --ignore-scripts
 
       - name: 前端 Vitest
         working-directory: app
@@ -65,7 +67,8 @@ jobs:
 
       - name: 安装依赖（锁文件）
         working-directory: app
-        run: npm ci
+        # 同 test job：跳过原生编译脚本，运行时用包内 prebuilds。
+        run: npm ci --ignore-scripts
 
       - name: 安装 Rust stable
         uses: dtolnay/rust-toolchain@stable
