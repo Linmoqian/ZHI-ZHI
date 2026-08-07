@@ -148,12 +148,18 @@ svg {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /*
+   * 更温和的运动：不做完全归零，而是把过渡压到 1ms，
+   * 让信息性过渡（opacity/color）近乎即时但保留，
+   * 无限循环动画（spinner 等）停用。
+   * 保留布局性 transform（居中等），不强行清空。
+   */
   *,
   *::before,
   *::after {
     scroll-behavior: auto !important;
-    animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
   }
 }
