@@ -956,7 +956,7 @@
 }
 
 /* 分隔条插槽：竖向容器，上下为拖拽热区，中央为交换按钮 */
-/* 两卡片之间的间隙：仅容纳中央的拖拽手柄 */
+/* 拖拽分隔条插槽：竖向容器 */
 .split-pane__handle-slot {
   position: relative;
   z-index: 20;
@@ -964,8 +964,7 @@
   flex: 0 0 auto;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  width: 12px;
+  width: 14px;
   height: 100%;
 }
 
@@ -994,17 +993,19 @@
   opacity: 0.96;
 }
 
-/* 拖拽手柄：仅中央一个小方块可抓，非整条竖线 */
+/* 拖拽手柄：两栏之间可抓取的分隔条 */
 .split-pane__handle {
-  position: relative;
+  position: absolute;
   z-index: 20;
+  top: 0;
+  left: 50%;
   width: 12px;
-  height: 12px;
+  height: 100%;
   padding: 0;
- border: 0;
-  border-radius: 3px;
+  border: 0;
   background: transparent;
   cursor: col-resize;
+  transform: translateX(-50%);
   transition: background 0.15s ease;
 }
 
@@ -1070,33 +1071,45 @@
 }
 
 /* 中央水平横线「-」 */
-.split-pane__grip {
+/* 中央竖条指示 */
+.split-pane__handle::before {
+  content: '';
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 6px;
-  height: 1.5px;
-  border-radius: 1px;
-  background: #c8c0ae;
+  width: 4px;
+  height: 40px;
+  border-radius: 4px;
+  background: #c8d4e8;
   transform: translate(-50%, -50%);
   transition:
     background 0.15s ease,
+    height 0.15s ease,
     width 0.15s ease;
 }
 
-.split-pane__handle.is-hover .split-pane__grip {
+.split-pane__handle.is-hover::before {
   background: var(--blue);
-  width: 8px;
+  height: 56px;
+  width: 5px;
 }
 
-.split-pane__handle.is-dragging .split-pane__grip {
+.split-pane__handle.is-dragging::before {
   background: var(--blue-dark);
-  width: 10px;
+  height: 80%;
 }
 
-.split-pane__handle:hover,
-.split-pane__handle.is-hover {
-  background: rgba(74, 122, 200, 0.08);
+.split-pane__handle:hover {
+  background: rgba(74, 122, 200, 0.06);
+}
+
+.split-pane__handle.is-dragging {
+  background: rgba(74, 122, 200, 0.1);
+}
+
+.split-pane__grip {
+  position: absolute;
+  inset: 0;
 }
 
 /* 面板隐藏后的「显示面板」竖条 */
