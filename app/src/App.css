@@ -181,14 +181,19 @@
   opacity: 0;
   pointer-events: none;
   transform: translateY(16px);
+  /* 退出走默认态：更快地收起，避免与进入等长 */
   transition:
-    opacity 150ms ease,
-    transform 150ms steps(3, end);
+    opacity 100ms ease,
+    transform 100ms steps(2, end);
 }
 
 .app-toast.is-visible {
   opacity: 1;
   transform: translateY(0);
+  /* 进入走显示态：保留像素跳跃感 */
+  transition:
+    opacity 150ms ease,
+    transform 150ms steps(3, end);
 }
 
 .app-toast > span {
