@@ -924,7 +924,8 @@
 }
 
 .split-pane__left,
-.split-pane__right {
+.split-pane__right,
+.split-pane__panel {
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -933,10 +934,11 @@
   overflow: hidden;
 }
 
+/* 左右两栏通过 padding 留出间隙，分隔条与交换按钮悬浮其间。
+   互换时 motion layout 动画让面板平滑滑过对方位置。 */
 .split-pane__left {
   flex: 0 0 auto;
   padding-right: 14px;
-  border-right: 0;
 }
 
 .split-pane__right {
@@ -944,18 +946,86 @@
   padding-left: 14px;
 }
 
-/* 拖拽手柄：两栏之间可抓取的分隔条 */
-.split-pane__handle {
+/* 分隔条插槽：竖向容器，上下为拖拽热区，中央为交换按钮 */
+.split-pane__handle-slot {
   position: relative;
   z-index: 20;
+  display: flex;
   flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  width: 14px;
+  height: 100%;
+}
+
+/* 拖拽手柄：两栏之间可抓取的分隔条 */
+.split-pane__handle {
+  position: absolute;
+  z-index: 20;
+  top: 0;
+  left: 50%;
   width: 12px;
   height: 100%;
   padding: 0;
   border: 0;
   background: transparent;
   cursor: col-resize;
+  transform: translateX(-50%);
   transition: background 0.15s ease;
+}
+
+/* 中央交换按钮（hover 分隔条时显现） */
+.split-pane__swap {
+  position: absolute;
+  z-index: 25;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid #c8d4e8;
+  border-radius: 6px;
+  color: #6680a0;
+  background: #f4f8ff;
+  box-shadow:
+    0 1px 0 #fff inset,
+    0 2px 0 #d6e1f2,
+    0 3px 6px rgba(72, 104, 144, 0.12);
+  cursor: pointer;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.7);
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease,
+    color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.split-pane__handle-slot:hover .split-pane__swap,
+.split-pane__swap:focus-visible {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.split-pane__swap:hover {
+  color: var(--blue-dark);
+  background: #e7f1ff;
+  box-shadow:
+    0 1px 0 #fff inset,
+    0 2px 0 #b8cdf0,
+    0 4px 10px rgba(72, 104, 144, 0.2);
+}
+
+.split-pane__swap:active {
+  transform: translate(-50%, -50%) scale(0.9);
+}
+
+.split-pane__swap svg {
+  width: 14px;
+  height: 14px;
 }
 
 .split-pane__handle::before {
@@ -998,25 +1068,37 @@
   inset: 0;
 }
 
-/* 地图隐藏后的「显示地图」竖条 */
+/* 面板隐藏后的「显示面板」竖条 */
 .split-pane__reveal {
   position: relative;
   z-index: 20;
   display: flex;
   width: 34px;
   height: 100%;
+  margin: 0 7px;
   flex: 0 0 auto;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 6px;
   padding: 0;
-  border: 0;
-  border-right: 1px solid var(--line);
-  background: rgba(238, 245, 255, 0.6);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 253, 248, 0.88);
+  box-shadow:
+    0 2px 0 #efe9dc,
+    0 8px 18px rgba(72, 58, 40, 0.07);
   color: var(--blue-dark);
   cursor: pointer;
   writing-mode: vertical-rl;
+  backdrop-filter: blur(10px);
+}
+
+.split-pane__reveal:hover {
+  background: rgba(231, 241, 255, 0.95);
+  box-shadow:
+    0 2px 0 #d6e4f5,
+    0 10px 22px rgba(72, 104, 144, 0.12);
 }
 
 .split-pane__reveal:hover {
