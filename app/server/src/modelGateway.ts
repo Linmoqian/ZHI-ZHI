@@ -1,14 +1,16 @@
-import type { CompiledContext } from './domain.ts'
+import type { CompiledTurn } from './domain.ts'
 
 export type ModelGateway = {
-  /** 根据编译后的分支上下文生成助手回复；失败时抛出异常。 */
+  /** 根据编译后的回合路径生成助手回复；失败时抛出异常。 */
   complete(input: ModelInput): Promise<string>
-  /** 用独立提示词生成“一句话概括”；失败时抛出异常。 */
+  /** 用独立提示词生成「一句话概括」；失败时抛出异常。 */
   summarize(content: string): Promise<string>
 }
 
 export type ModelInput = {
-  compiledContext: CompiledContext
+  topic: string
+  /** 根 → 叶时间序的可见回合路径。 */
+  turns: CompiledTurn[]
   userMessage: string
 }
 
@@ -24,74 +26,44 @@ type ChatMessage = {
 export const DEFAULT_OLLAMA_ENDPOINT = 'http://127.0.0.1:11434'
 
 const SYSTEM_PROMPT = [
-  '你是“知枝”，一款可分支、可回溯、可合并的 AI 学习助手。',
+  '你是「知枝」，一款可分支、可回溯的 AI 学习助手。',
   '你用简体中文回答，面向正在自主学习的用户。',
   '回答要具体、诚实、面向理解，不确定时明确说明，不编造事实。',
-  '你收到的上下文来自一条独立的学习分支，只有这条分支可见的内容才会出现；不要猜测其他分支的内容。',
+  '你收到的上下文来自一条独立的学习支线，只有这条支线可见的回合才会出现；不要猜测其他支线的内容。',
 ].join('\n')
 
 /**
- * 组装模型输入：系统指令 + 编译出的分支上下文（父链摘要、近期原文、工作记忆）。
+ * 组装模型输入：系统指令 + 可见回合路径（根→叶）+ 本轮用户输入。
  */
 export function assembleModelInput(
-  compiledContext: CompiledContext,
+  topic: string,
+  turns: CompiledTurn[],
   userMessage: string,
 ): ModelInput {
-  return { compiledContext, userMessage }
+  return { topic, turns, userMessage }
 }
 
 /**
- * 将编译出的分支上下文转为模型可见的消息序列。
+ * 将回合路径转为模型可见的消息序列。
+ * 回合树模型下，可见上下文 = 从叶到根的唯一路径，分叉即隔离。
  */
 export function toChatMessages(input: ModelInput): ChatMessage[] {
-  const { compiledContext, userMessage } = input
-  const messages: ChatMessage[] = [{ role: 'system', content: SYSTEM_PROMPT }]
+  const { topic, turns, userMessage } = input
+  const messages: ChatMessage[] = [
+    { role: 'system', content: SYSTEM_PROMPT },
+  ]
 
-  const topicLine = `当前学习主题：${compiledContext.topic}`
-  const modeLine = compiledContext.inherited
-    ? '本分支继承创建时的父节点上下文，但不会读取同级分支。'
-    : '本分支与父节点及同级分支隔离，只使用当前分支的消息。'
   messages.push({
     role: 'system',
-    content: [topicLine, modeLine].join('\n'),
+    content: [
+      `当前对话主题：${topic}`,
+      '以下是你与用户在本支线上的完整可见历史，分叉出去的其他支线对你不可见。',
+    ].join('\n'),
   })
 
-  const visible = compiledContext.messages
-  if (visible.length > 0) {
-    const body = visible
-      .map(
-        (message) =>
-          `[${message.role === 'user' ? '用户' : '助手'}] ${message.content}`,
-      )
-      .join('\n')
-    messages.push({
-      role: 'system',
-      content: `以下是本分支可见的近期历史消息：\n${body}`,
-    })
-  }
-
-  if (compiledContext.summaryBlocks.length > 0) {
-    const blocks = compiledContext.summaryBlocks
-      .map((summary, index) => {
-        const facts = summary.establishedFacts.map(
-          (fact) => `- ${fact}`).join('\n')
-        const questions = summary.openQuestions
-          .map((question) => `- ${question}`)
-          .join('\n')
-        return [
-          `第 ${index + 1} 段摘要（较早历史）：`,
-          `目标：${summary.goal}`,
-          facts ? `已建立事实：\n${facts}` : '',
-          questions ? `先前疑问：\n${questions}` : '',
-        ]
-          .filter(Boolean)
-          .join('\n')
-      })
-      .join('\n\n')
-    messages.push({
-      role: 'system',
-      content: `本分支较早的历史已压缩为如下分层摘要，仅供参考：\n${blocks}`,
-    })
+  for (const turn of turns) {
+    messages.push({ role: 'user', content: turn.userContent })
+    messages.push({ role: 'assistant', content: turn.assistantContent })
   }
 
   messages.push({ role: 'user', content: userMessage })

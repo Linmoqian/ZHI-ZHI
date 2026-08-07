@@ -364,27 +364,8 @@ export class TurnSessionStore {
   ): Promise<string> {
     try {
       const modelInput = assembleModelInput(
-        {
-          sessionId: this.id,
-          branchId: '',
-          topic,
-          inherited: true,
-          messages: contextTurns.flatMap((turn) => [
-            {
-              id: `${turn.id}-user`,
-              branchId: '',
-              role: 'user' as const,
-              content: turn.userContent,
-            },
-            {
-              id: `${turn.id}-assistant`,
-              branchId: '',
-              role: 'assistant' as const,
-              content: turn.assistantContent,
-            },
-          ]),
-          summaryBlocks: [],
-        },
+        topic,
+        contextTurns,
         userContent,
       )
       return await this.modelGateway.complete(modelInput)
