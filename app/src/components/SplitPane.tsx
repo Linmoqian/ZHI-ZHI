@@ -30,6 +30,9 @@ const SWAP_DURATION = 0.4
 /** 卡片互换拖拽手柄选择器：只有此元素可触发互换。 */
 const SWAP_HANDLE_SELECTOR = '.panel-swap-handle'
 
+const clampRatio = (value: number) =>
+  Math.min(MAX_RATIO, Math.max(MIN_RATIO, value))
+
 export function SplitPane({
   left,
   right,
@@ -52,10 +55,6 @@ export function SplitPane({
     offset: number
     over: Side
   } | null>(null)
-
-  const clamp = useCallback((value: number) => {
-    return Math.min(MAX_RATIO, Math.max(MIN_RATIO, value))
-  }, [])
 
   const leftPercent = isLeftVisible ? ratio * 100 : 0
 
@@ -81,7 +80,7 @@ export function SplitPane({
       setIsResizing(true)
 
       const apply = (clientX: number) => {
-        const next = clamp((clientX - rect.left) / rect.width)
+        const next = clampRatio((clientX - rect.left) / rect.width)
         // 直接操作 DOM——逐帧实时，无 React/motion 延迟
         leftEl.style.width = `${next * 100}%`
       }
@@ -95,7 +94,7 @@ export function SplitPane({
         document.body.style.cursor = ''
         // 读取最终宽度比例，提交到 state
         const finalRect = leftEl.getBoundingClientRect()
-        const finalRatio = clamp(finalRect.width / rect.width)
+        const finalRatio = clampRatio(finalRect.width / rect.width)
         leftEl.style.transition = ''
         setIsResizing(false)
         onRatioChange(finalRatio)
@@ -106,7 +105,7 @@ export function SplitPane({
       document.body.style.userSelect = 'none'
       document.body.style.cursor = 'col-resize'
     },
-    [clamp, isLeftVisible, onRatioChange],
+    [isLeftVisible, onRatioChange],
   )
 
   /** 面板互换：order 切换 + Motion layout 过渡，ratio 取补。 */
