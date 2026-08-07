@@ -720,84 +720,7 @@
   height: 17px;
 }
 
-.explore-strip {
-  display: flex;
-  width: 100%;
-  min-height: 76px;
-  margin-top: 32px;
-  padding: 13px 22px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  border-radius: 8px;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
 @media (hover: hover) and (pointer: fine) {
-  .explore-strip:hover {
-    background: white;
-  }
-}
-
-.explore-strip__lead {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.explore-strip__lead > span:last-child {
-  display: flex;
-  flex-direction: column;
-}
-
-.explore-strip__lead strong {
-  font-size: 16px;
-}
-
-.explore-strip__lead small {
-  margin-top: 3px;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.explore-strip > svg {
-  width: 24px;
-  height: 24px;
-  color: var(--blue);
-}
-
-.explore-path {
-  position: relative;
-  display: flex;
-  flex: 1;
-  max-width: 480px;
-  align-items: center;
-  justify-content: space-around;
-}
-
-.explore-path::before {
-  position: absolute;
-  right: 0;
-  left: 0;
-  top: calc(50% - 2px);
-  height: 4px;
-  background: repeating-linear-gradient(
-    90deg,
-    #ddd5c8 0 7px,
-    transparent 7px 13px
-  );
-  content: "";
-}
-
-.explore-path i {
-  position: relative;
-  z-index: 1;
-  width: 18px;
-  height: 18px;
-  background: var(--tone);
-  box-shadow: 0 3px 0 var(--tone-dark), 2px 4px 0 rgba(66, 59, 49, 0.1);
 }
 
 /* Workspace shell */
@@ -2377,14 +2300,6 @@
 
   .recent-card {
     display: block;
-  }
-
-  .explore-path {
-    display: none;
-  }
-
-  .explore-strip {
-    gap: 12px;
   }
 
   .workspace-topbar {
