@@ -791,6 +791,20 @@
   overflow: hidden;
 }
 
+/* 卡片悬浮容器：四周留白，让地图与对话卡片浮在网格纸上 */
+.workspace-view > .workspace-grid,
+.workspace-view > .split-pane {
+  padding: 0 18px 18px;
+  gap: 0;
+}
+
+@media (min-width: 981px) {
+  .workspace-view > .workspace-grid,
+  .workspace-view > .split-pane {
+    padding: 0 22px 22px;
+  }
+}
+
 .workspace-loading {
   display: grid;
   height: 100svh;
@@ -906,7 +920,7 @@
   min-width: 0;
   min-height: 0;
   height: 100%;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .split-pane__left,
@@ -921,11 +935,13 @@
 
 .split-pane__left {
   flex: 0 0 auto;
-  border-right: 1px solid var(--line);
+  padding-right: 14px;
+  border-right: 0;
 }
 
 .split-pane__right {
   flex: 1 1 0%;
+  padding-left: 14px;
 }
 
 /* 拖拽手柄：两栏之间可抓取的分隔条 */
@@ -1022,9 +1038,44 @@
 }
 
 .workspace-panel {
+  position: relative;
   min-width: 0;
   min-height: 0;
-  background: rgba(255, 253, 248, 0.7);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 253, 248, 0.94);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 2px 0 #efe9dc,
+    0 5px 0 rgba(102, 88, 67, 0.04),
+    0 14px 28px rgba(72, 58, 40, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+/* 像素边角装饰：四角的 L 形小线条点缀，呼应精致像素语言。
+   用 background 多重渐变在一个伪元素上画四个角，避免占用两个伪元素。
+   角标内嵌在圆角内侧，不与 border-radius 重叠。 */
+.workspace-panel::before {
+  position: absolute;
+  z-index: 3;
+  inset: 7px;
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(74, 122, 200, 0.42), rgba(74, 122, 200, 0.42)) top left / 6px 1px no-repeat,
+    linear-gradient(rgba(74, 122, 200, 0.42), rgba(74, 122, 200, 0.42)) top left / 1px 6px no-repeat,
+    linear-gradient(rgba(74, 122, 200, 0.42), rgba(74, 122, 200, 0.42)) top right / 6px 1px no-repeat,
+    linear-gradient(rgba(74, 122, 200, 0.42), rgba(74, 122, 200, 0.42)) top right / 1px 6px no-repeat,
+    linear-gradient(rgba(74, 122, 200, 0.42), rgba(74, 122, 200, 0.42)) bottom left / 6px 1px no-repeat,
+    linear-gradient(rgba(74, 122, 200, 0.42), rgba(74, 122, 200, 0.42)) bottom left / 1px 6px no-repeat,
+    linear-gradient(rgba(74, 122, 200, 0.42), rgba(74, 122, 200, 0.42)) bottom right / 6px 1px no-repeat,
+    linear-gradient(rgba(74, 122, 200, 0.42), rgba(74, 122, 200, 0.42)) bottom right / 1px 6px no-repeat;
+  content: "";
+  pointer-events: none;
+}
+
+/* 卡片头部跟随圆角 */
+.workspace-panel > .panel-header {
+  border-radius: 14px 14px 0 0;
 }
 
 .panel-header {
