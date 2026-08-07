@@ -18,6 +18,7 @@
   "dependencies": {
     "@base-ui/react": "^1.6.0",
     "@xyflow/react": "^12.11.2",
+    "motion": "^13.0.0",
     "pixelarticons": "^2.2.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { TurnDTO, WorkspacePanel } from '../types'
 import { PixelIcon } from './PixelIcon'
+import { SplitPane } from './SplitPane'
 import { TurnMap } from './TurnMap'
 import { TurnConversation } from './TurnConversation'
 
@@ -35,12 +36,15 @@ export function TurnWorkspace({
   onForkTurn,
 }: TurnWorkspaceProps) {
   const [isMapVisible, setIsMapVisible] = useState(true)
+  const [mapRatio, setMapRatio] = useState(0.35)
 
   const topic =
     turns.find((t) => t.parentId === null)?.userContent ?? '新的对话'
 
+  const toggleMap = () => setIsMapVisible((visible) => !visible)
+
   return (
-    <main className="workspace-view">
+    <main className={`workspace-view active-panel-${currentPanel}`}>
       <header className="workspace-topbar">
         <button
           className="back-home-button"
@@ -82,39 +86,31 @@ export function TurnWorkspace({
         ))}
       </div>
 
-      <div
-        className={`workspace-grid active-panel-${currentPanel} ${
-          isMapVisible ? '' : 'is-map-hidden'
-        }`}
-      >
-        <TurnMap
-          turns={turns}
-          activeLeafId={activeLeafId}
-          draftMode={draftMode}
-          onSelectTurn={onSelectTurn}
-          onHide={() => setIsMapVisible(false)}
-        />
-        {!isMapVisible ? (
-          <button
-            className="map-reveal-tab"
-            type="button"
-            aria-label="显示对话地图"
-            title="显示对话地图"
-            onClick={() => setIsMapVisible(true)}
-          >
-            <PixelIcon name="map" />
-            <span>显示地图</span>
-          </button>
-        ) : null}
-        <TurnConversation
-          turns={turns}
-          activeLeafId={activeLeafId}
-          draftMode={draftMode}
-          isGenerating={isGenerating}
-          onSendMessage={onSendMessage}
-          onForkTurn={onForkTurn}
-        />
-      </div>
+      <SplitPane
+        isLeftVisible={isMapVisible}
+        ratio={mapRatio}
+        onRatioChange={setMapRatio}
+        onToggleLeft={toggleMap}
+        left={
+          <TurnMap
+            turns={turns}
+            activeLeafId={activeLeafId}
+            draftMode={draftMode}
+            onSelectTurn={onSelectTurn}
+            onHide={toggleMap}
+          />
+        }
+        right={
+          <TurnConversation
+            turns={turns}
+            activeLeafId={activeLeafId}
+            draftMode={draftMode}
+            isGenerating={isGenerating}
+            onSendMessage={onSendMessage}
+            onForkTurn={onForkTurn}
+          />
+        }
+      />
     </main>
   )
 }

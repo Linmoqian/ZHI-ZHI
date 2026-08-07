@@ -900,23 +900,125 @@
   box-shadow: 1px 2px 0 var(--tone-dark);
 }
 
-.workspace-grid {
+.split-pane {
   position: relative;
-  display: grid;
+  display: flex;
   min-width: 0;
   min-height: 0;
-  grid-template-columns:
-    minmax(390px, 0.85fr)
-    minmax(620px, 1.55fr);
+  height: 100%;
   overflow: hidden;
 }
 
-.workspace-grid.is-map-hidden {
-  grid-template-columns: minmax(0, 1fr);
+.split-pane__left,
+.split-pane__right {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.workspace-grid.is-map-hidden > .map-panel {
-  display: none;
+.split-pane__left {
+  flex: 0 0 auto;
+  border-right: 1px solid var(--line);
+}
+
+.split-pane__right {
+  flex: 1 1 0%;
+}
+
+/* 拖拽手柄：两栏之间可抓取的分隔条 */
+.split-pane__handle {
+  position: relative;
+  z-index: 20;
+  flex: 0 0 auto;
+  width: 12px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+  transition: background 0.15s ease;
+}
+
+.split-pane__handle::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 40px;
+  border-radius: 4px;
+  background: #c8d4e8;
+  transform: translate(-50%, -50%);
+  transition:
+    background 0.15s ease,
+    height 0.15s ease,
+    width 0.15s ease;
+}
+
+.split-pane__handle.is-hover::before {
+  background: var(--blue);
+  height: 56px;
+  width: 5px;
+}
+
+.split-pane__handle.is-dragging::before {
+  background: var(--blue-dark);
+  height: 80%;
+}
+
+.split-pane__handle:hover {
+  background: rgba(74, 122, 200, 0.06);
+}
+
+.split-pane__handle.is-dragging {
+  background: rgba(74, 122, 200, 0.1);
+}
+
+.split-pane__grip {
+  position: absolute;
+  inset: 0;
+}
+
+/* 地图隐藏后的「显示地图」竖条 */
+.split-pane__reveal {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  width: 34px;
+  height: 100%;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: rgba(238, 245, 255, 0.6);
+  color: var(--blue-dark);
+  cursor: pointer;
+  writing-mode: vertical-rl;
+}
+
+.split-pane__reveal:hover {
+  background: rgba(231, 241, 255, 0.9);
+}
+
+.split-pane__reveal-icon {
+  writing-mode: horizontal-tb;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.split-pane__reveal-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  writing-mode: vertical-rl;
 }
 
 .workspace-panel {
@@ -982,36 +1084,7 @@
   height: 15px;
 }
 
-.map-reveal-tab {
-  position: absolute;
-  z-index: 15;
-  top: 50%;
-  left: 0;
-  display: grid;
-  width: 40px;
-  height: 42px;
-  padding: 0;
-  place-items: center;
-  border: 1px solid #abc2df;
-  border-left: 0;
-  border-radius: 0 5px 5px 0;
-  color: var(--blue-dark);
-  background: #eef5ff;
-  box-shadow: 3px 4px 0 rgba(72, 104, 144, 0.12);
-  font-size: 9px;
-  font-weight: 800;
-  cursor: pointer;
-  transform: translateY(-50%);
-}
-
-.map-reveal-tab svg {
-  width: 17px;
-  height: 17px;
-}
-
-.map-reveal-tab span {
-  display: none;
-}
+/* map-reveal-tab 已由 SplitPane 的 split-pane__reveal 替代 */
 
 .map-shortcut-hint {
   display: flex;
@@ -2276,10 +2349,9 @@
     font-size: 25px;
   }
 
-  .workspace-grid {
-    grid-template-columns:
-      minmax(300px, 0.68fr)
-      minmax(480px, 1.7fr);
+  /* 平板端：缩小分隔手柄触控热区 */
+  .split-pane__handle {
+    width: 16px;
   }
 
   .learning-guide {
@@ -2369,28 +2441,30 @@
   }
 
   .map-hide-button,
-  .map-reveal-tab {
+  .split-pane__handle,
+  .split-pane__reveal {
     display: none;
   }
 
-  .workspace-grid {
+  /* 移动端：分栏面板退化为单面板切换（由 mobile-panel-tabs 控制） */
+  .split-pane {
     display: block;
   }
 
-  .workspace-grid > .workspace-panel {
+  .split-pane__left,
+  .split-pane__right {
     display: none;
     width: 100%;
     height: 100%;
     border-right: 0;
   }
 
-  .workspace-grid.active-panel-map > .map-panel,
-  .workspace-grid.active-panel-conversation > .conversation-panel {
+  .workspace-view.active-panel-map .split-pane__left {
     display: flex;
   }
 
-  .workspace-grid.active-panel-conversation > .conversation-panel {
-    display: grid;
+  .workspace-view.active-panel-conversation .split-pane__right {
+    display: flex;
   }
 
   .map-panel .branch-canvas {
