@@ -38,6 +38,10 @@ export default defineConfig({
         configDir,
         'node_modules/@tauri-apps/api/window.js',
       ),
+      '@tauri-apps/api/core': resolve(
+        configDir,
+        'node_modules/@tauri-apps/api/core.js',
+      ),
     },
   },
   server: {

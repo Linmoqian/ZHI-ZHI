@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { TitleBar } from '../../app/src/components/TitleBar'
 
-// 桌面壳 IPC：jsdom 下不存在 Tauri 运行时，整体 mock 窗口 API。
+// 桌面壳 IPC：jsdom 下不存在 Tauri 运行时，整体 mock 窗口 API 与内核检测。
 // vi.hoisted 保证 mock 工厂可安全引用这些 vi.fn。
 const { windowMock } = vi.hoisted(() => ({
   windowMock: {
@@ -12,6 +12,11 @@ const { windowMock } = vi.hoisted(() => ({
     isMaximized: vi.fn(),
     close: vi.fn(),
   },
+}))
+
+vi.mock('@tauri-apps/api/core', () => ({
+  // 主用例统一视为 Tauri 环境；非 Tauri 降级场景见 degrade.test.tsx（隔离模块复位）。
+  isTauri: () => true,
 }))
 
 vi.mock('@tauri-apps/api/window', () => ({
@@ -73,5 +78,13 @@ describe('TitleBar', () => {
     closeButton.focus()
     await user.keyboard('{Enter}')
     expect(windowMock.close).toHaveBeenCalled()
+  })
+
+  it('双击标题栏切换最大化/还原', async () => {
+    const user = userEvent.setup()
+    render(<TitleBar />)
+    await user.dblClick(document.querySelector('.title-bar')!)
+    expect(windowMock.toggleMaximize).toHaveBeenCalled()
+    expect(windowMock.isMaximized).toHaveBeenCalled()
   })
 })
