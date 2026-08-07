@@ -63,6 +63,10 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
 
+      - name: 安装依赖（锁文件）
+        working-directory: app
+        run: npm ci
+
       - name: 安装 Rust stable
         uses: dtolnay/rust-toolchain@stable
 
