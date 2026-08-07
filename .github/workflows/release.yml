@@ -83,7 +83,14 @@ jobs:
         run: |
           echo "Windows 需在安装时引导 WebView2 bootstrapper；此处由 tauri 构建处理。"
 
-      - name: 构建安装包（beforeBuildCommand 内完成 sidecar + server + 前端）
+      - name: 构建安装包（Windows：NSIS exe）
+        if: matrix.os == 'windows-latest'
+        working-directory: app
+        # 只产出 NSIS 安装器（exe），跳过 WiX/MSI 避免 light.exe 兼容问题。
+        run: npm run tauri build -- --bundles nsis
+
+      - name: 构建安装包（macOS：dmg）
+        if: matrix.os != 'windows-latest'
         working-directory: app
         run: npm run tauri build
 
@@ -104,7 +111,6 @@ jobs:
             app/src-tauri/target/release/bundle/dmg/*.dmg
             app/src-tauri/target/release/bundle/macos/*.app
             app/src-tauri/target/release/bundle/nsis/*.exe
-            app/src-tauri/target/release/bundle/msi/*.msi
 
   release:
     name: 发布 Release（tag 触发）
@@ -133,4 +139,3 @@ jobs:
           files: |
             artifacts/**/*.dmg
             artifacts/**/*.exe
-            artifacts/**/*.msi
