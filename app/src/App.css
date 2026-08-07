@@ -920,6 +920,7 @@
   min-width: 0;
   min-height: 0;
   height: 100%;
+  box-sizing: border-box;
   overflow: visible;
 }
 
@@ -1102,8 +1103,11 @@
 
 .workspace-panel {
   position: relative;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
+  height: 100%;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: rgba(255, 253, 248, 0.94);
@@ -1232,7 +1236,6 @@
 .map-panel {
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--line);
 }
 
 .map-legend {
