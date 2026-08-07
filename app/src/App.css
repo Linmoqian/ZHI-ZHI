@@ -1271,40 +1271,6 @@
   flex-direction: column;
 }
 
-.map-legend {
-  display: flex;
-  min-height: 42px;
-  padding: 9px 13px;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 12px;
-  border-bottom: 1px solid #e7e1d7;
-  background: rgba(255, 253, 248, 0.8);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.map-legend::-webkit-scrollbar {
-  display: none;
-}
-
-.map-legend span {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--muted);
-  font-size: 8px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.map-legend i {
-  width: 7px;
-  height: 7px;
-  background: var(--tone);
-  box-shadow: 1px 1px 0 var(--tone-dark);
-}
-
 .branch-canvas {
   position: relative;
   min-height: 0;

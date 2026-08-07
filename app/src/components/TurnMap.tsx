@@ -250,21 +250,6 @@ export function TurnMap({
         </div>
       </header>
 
-      <div className="map-legend" aria-label="对话层级图例">
-        <span>
-          <i className="tone-blue" />第 1 层
-        </span>
-        <span>
-          <i className="tone-green" />第 2 层
-        </span>
-        <span>
-          <i className="tone-purple" />第 3 层
-        </span>
-        <span>
-          <i className="tone-orange" />更深层
-        </span>
-      </div>
-
       <div className="branch-canvas" data-testid="turn-map">
         {draftMode || turns.length === 0 ? (
           <div className="turn-map-empty">
