@@ -839,7 +839,7 @@
   border: 7px solid #c7dcf7;
   border-top-color: var(--blue);
   border-radius: 0;
-  animation: loading-steps 700ms steps(4, end) infinite;
+  animation: loading-steps 500ms steps(4, end) infinite;
 }
 
 .workspace-loading strong {
