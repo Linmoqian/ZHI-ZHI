@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict'
+import { mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import test from 'node:test'
 import { ContentStore } from '../src/contentStore.ts'
 import type { ModelGateway } from '../src/modelGateway.ts'
 import { TurnSessionStore } from '../src/turnStore.ts'
+import { createTurnJournaledPersistor } from '../src/turnJournal.ts'
 
 function createFakeGateway(reply = '测试回复'): ModelGateway {
   return {
@@ -164,4 +168,74 @@ test('不存在的回合抛出 404', async () => {
     () => store.compileContext('不存在'),
     { code: 'TURN_NOT_FOUND' },
   )
+})
+
+test('persist 后通过 persistor.load 能完整恢复会话', async () => {
+  const tmpDir = await mkdtemp(path.join(tmpdir(), 'zhizhi-turn-'))
+  const persistor = createTurnJournaledPersistor(tmpDir)
+  const contentStore = new ContentStore()
+  const store = await TurnSessionStore.create(
+    '持久化全链路',
+    '根问题',
+    contentStore,
+    { modelGateway: createFakeGateway('根回复'), persistor },
+  )
+  await store.appendTurn({
+    parentId: store.rootId!,
+    userContent: '跟进问题',
+  })
+  await store.persist()
+
+  const dump = await persistor.load(store.id)
+  assert.ok(dump)
+  assert.equal(dump!.turns.length, 2)
+
+  // 从 dump 恢复为新 store，验证内容可达
+  const restored = TurnSessionStore.restore(
+    dump!,
+    new ContentStore(),
+    { modelGateway: createFakeGateway() },
+  )
+  const leaf = restored.listTurns().find((t) => t.parentId !== null)!
+  const context = restored.compileContext(leaf.id)
+  assert.equal(context.turns.length, 2)
+  assert.equal(context.turns[1].userContent, '跟进问题')
+  assert.equal(context.turns[0].assistantContent, '根回复')
+})
+
+test('未配置 persistor 时 persist 为空操作', async () => {
+  const contentStore = new ContentStore()
+  const store = await TurnSessionStore.create(
+    '空持久化',
+    '问题',
+    contentStore,
+    { modelGateway: createFakeGateway() },
+  )
+  // 不应抛错
+  await store.persist()
+  assert.equal(store.listTurns().length, 1)
+})
+
+test('编辑回合产生 turn_updated 事件且可恢复', async () => {
+  const tmpDir = await mkdtemp(path.join(tmpdir(), 'zhizhi-turn-'))
+  const persistor = createTurnJournaledPersistor(tmpDir)
+  const contentStore = new ContentStore()
+  const store = await TurnSessionStore.create(
+    '编辑持久化',
+    '原始问题',
+    contentStore,
+    { modelGateway: createFakeGateway(), persistor },
+  )
+  store.updateTurn(store.rootId!, { userContent: '修改后的问题' })
+  await store.persist()
+
+  const dump = await persistor.load(store.id)
+  assert.ok(dump)
+  const restored = TurnSessionStore.restore(
+    dump!,
+    new ContentStore(),
+    { modelGateway: createFakeGateway() },
+  )
+  const context = restored.compileContext(restored.rootId!)
+  assert.equal(context.turns[0].userContent, '修改后的问题')
 })

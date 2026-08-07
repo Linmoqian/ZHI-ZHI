@@ -17,6 +17,12 @@ import {
   type ModelGateway,
 } from './modelGateway.ts'
 import type { ContentStore } from './contentStore.ts'
+import type {
+  SerializedTurn,
+  TurnJournalEvent,
+  TurnPersistor,
+} from './turnJournal.ts'
+import { toSerializedTurn } from './turnJournal.ts'
 
 /** 追加回合的输入：指定从哪个父回合继续生长。 */
 export type AppendTurnInput = {
@@ -33,6 +39,8 @@ export type ForkTurnInput = {
 
 export type TurnStoreOptions = {
   modelGateway: ModelGateway
+  /** 可选的持久化器；提供后每次变更会累积事件并按需落盘。 */
+  persistor?: TurnPersistor
 }
 
 const RECENT_TURN_LIMIT = 12
@@ -44,6 +52,9 @@ const RECENT_TURN_LIMIT = 12
 export class TurnSessionStore {
   readonly contentStore: ContentStore
   private readonly modelGateway: ModelGateway
+  private readonly persistor: TurnPersistor | null
+  /** 自上次落盘以来累积的事件；persist 时一并提交并清空。 */
+  private readonly pendingEvents: TurnJournalEvent[] = []
   private readonly turns = new Map<string, TurnNode>()
   /** 派生索引：parentId → 子回合 id 列表。从 turns 重建，不持久化。 */
   private readonly childIndex = new Map<string, string[]>()
@@ -61,6 +72,7 @@ export class TurnSessionStore {
     this.createdAt = createdAt
     this.contentStore = contentStore
     this.modelGateway = options.modelGateway
+    this.persistor = options.persistor ?? null
   }
 
   readonly id: string
@@ -106,6 +118,7 @@ export class TurnSessionStore {
     }
     store.turns.set(rootTurn.id, rootTurn)
     store.rootTurnId = rootTurn.id
+    store.recordAppend(rootTurn, normalizedUser, assistantContent)
     return store
   }
 
@@ -189,6 +202,10 @@ export class TurnSessionStore {
     }
 
     this.turns.set(turnId, updated)
+    this.recordUpdate(updated, {
+      userContent: patch.userContent?.trim(),
+      assistantContent: patch.assistantContent?.trim(),
+    })
     return updated
   }
 
@@ -262,6 +279,15 @@ export class TurnSessionStore {
     }
   }
 
+  /** 将累积的事件提交给持久化器。未配置 persistor 时为空操作。 */
+  async persist(): Promise<void> {
+    if (!this.persistor || this.pendingEvents.length === 0) {
+      return
+    }
+    const events = this.pendingEvents.splice(0)
+    await this.persistor.append(this.id, events, () => this.serialize())
+  }
+
   // ------------------------------------------------------------------
   // 私有辅助
   // ------------------------------------------------------------------
@@ -280,7 +306,40 @@ export class TurnSessionStore {
     }
     this.turns.set(turn.id, turn)
     this.addToIndex(parentId, turn.id)
+    this.recordAppend(turn, userContent, assistantContent)
     return turn
+  }
+
+  /** 记录回合新增事件（生长 / 分叉）。 */
+  private recordAppend(
+    turn: TurnNode,
+    userContent: string,
+    assistantContent: string,
+  ): void {
+    const serialized: SerializedTurn = toSerializedTurn(turn)
+    this.pendingEvents.push({
+      type: 'turn_appended',
+      sessionId: this.id,
+      turn: serialized,
+      userContent,
+      assistantContent,
+      createdAt: turn.createdAt,
+    })
+  }
+
+  /** 记录回合内容变更事件。 */
+  private recordUpdate(
+    turn: TurnNode,
+    contents: { userContent?: string; assistantContent?: string },
+  ): void {
+    const serialized: SerializedTurn = toSerializedTurn(turn)
+    this.pendingEvents.push({
+      type: 'turn_updated',
+      sessionId: this.id,
+      turn: serialized,
+      userContent: contents.userContent,
+      assistantContent: contents.assistantContent,
+    })
   }
 
   private addToIndex(parentId: string, childId: string) {
