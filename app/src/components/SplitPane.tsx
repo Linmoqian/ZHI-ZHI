@@ -5,15 +5,16 @@ import { AnimatePresence, motion } from 'motion/react'
  * 可调整左右两栏占比的分隔面板。
  *
  * - 拖拽中间分隔条实时调整两栏宽度
- * - 分隔条中央的交换按钮（⇄）可互换两栏位置（类似 VS Code 拖动视图）
+ * - 拖拽任一面板的标题栏（header）到另一面板，可互换两栏位置
+ *   （类似 VS Code 拖动视图标签）
  * - 双击分隔条切换左栏的显示/隐藏（带 Motion 宽度动画）
  * - 左栏隐藏后露出竖向「显示」条，点击恢复
  *
- * 拖拽期间通过 inline style 直接设 width，避免每帧触发 React 重渲染；
+ * 拖拽宽度时通过 inline style 直接设 width，避免每帧触发 React 重渲染；
  * 拖拽结束时再提交 ratio 到 state。
  *
- * 互换时两栏用 Motion layout 动画平滑滑过对方位置，ratio 自动取补
- * （互换后原左栏占比 0.35 → 新右栏占比 0.35，即新左栏 0.65）。
+ * 面板互换通过 CSS order + Motion layout 动画，面板平滑滑过对方，
+ * ratio 自动取补（互换后原左栏占比 0.35 → 新右栏占比 0.35）。
  */
 
 type SplitPaneProps = {
@@ -34,6 +35,8 @@ type SplitPaneProps = {
 const MIN_RATIO = 0.22
 const MAX_RATIO = 0.68
 const SWAP_DURATION = 0.4
+/** header 选择器：拖拽这些元素可互换面板。 */
+const HEADER_SELECTOR = '.panel-header, .conversation-header'
 
 export function SplitPane({
   left,
@@ -44,9 +47,13 @@ export function SplitPane({
   onToggleLeft,
 }: SplitPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const leftRef = useRef<HTMLDivElement>(null)
+  const rightRef = useRef<HTMLDivElement>(null)
   const [dragRatio, setDragRatio] = useState<number | null>(null)
   const [isHovering, setIsHovering] = useState(false)
   const [isSwapped, setIsSwapped] = useState(false)
+  /** 拖拽中的目标面板（'left' | 'right' | null）。 */
+  const [dragOver, setDragOver] = useState<'left' | 'right' | null>(null)
 
   const effectiveRatio = dragRatio ?? ratio
   const leftPercent = isLeftVisible ? effectiveRatio * 100 : 0
@@ -95,11 +102,59 @@ export function SplitPane({
     [clamp, isLeftVisible, onRatioChange],
   )
 
-  /** 互换两栏位置；同时把 ratio 取补（左↔右占比对调）。 */
-  const handleSwap = useCallback(() => {
+  /**
+   * 面板互换。拖拽面板 header 到另一面板时触发。
+   * 通过 CSS order 切换视觉位置，Motion layout 负责过渡动画；
+   * ratio 取补，使原面板在新位置保持同等宽度。
+   */
+  const swap = useCallback(() => {
     onRatioChange(1 - ratio)
     setIsSwapped((swapped) => !swapped)
   }, [onRatioChange, ratio])
+
+  // HTML5 拖拽：header 为拖拽源，面板容器为放置目标。
+  // header 内的交互元素（按钮等）不触发拖拽，避免误操作。
+  const handleDragStart = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      const target = event.target as HTMLElement
+      if (!target.closest(HEADER_SELECTOR)) {
+        return
+      }
+      if (target.closest('button, input, textarea, select, a')) {
+        return
+      }
+      event.dataTransfer.effectAllowed = 'move'
+      // 用空透明图替代默认拖拽幽灵，避免视觉混乱（由 dragOver 高亮提示）。
+      event.dataTransfer.setData('text/plain', 'panel-swap')
+    },
+    [],
+  )
+
+  const handleDragOver = useCallback(
+    (event: React.DragEvent<HTMLDivElement>, side: 'left' | 'right') => {
+      if (!event.dataTransfer.types.includes('text/plain')) {
+        return
+      }
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'move'
+      setDragOver(side)
+    },
+    [],
+  )
+
+  const handleDrop = useCallback(
+    (side: 'left' | 'right') => {
+      setDragOver(null)
+      // 拖到另一侧才互换；拖回自身不操作。
+      if (
+        (side === 'left' && !isSwapped) ||
+        (side === 'right' && isSwapped)
+      ) {
+        swap()
+      }
+    },
+    [isSwapped, swap],
+  )
 
   useEffect(() => {
     return () => {
@@ -108,24 +163,29 @@ export function SplitPane({
     }
   }, [])
 
-  // 互换后，原 left/right 的 DOM 顺序不变，仅靠 CSS order 交换视觉位置。
-  // 这样 Motion 的 layout 动画能让两个面板平滑滑过对方。
   const leftOrder = isSwapped ? 3 : 1
   const rightOrder = isSwapped ? 1 : 3
 
   return (
     <div ref={containerRef} className="split-pane">
       <motion.div
-        className="split-pane__panel split-pane__left"
+        ref={leftRef}
+        className={`split-pane__panel split-pane__left ${
+          dragOver === 'left' ? 'is-drop-target' : ''
+        }`}
         layout
         transition={{
           layout: { duration: SWAP_DURATION, ease: [0.22, 1, 0.36, 1] },
         }}
-        style={{
-          order: leftOrder,
-          width: `${leftPercent}%`,
-        }}
+        style={{ order: leftOrder, width: `${leftPercent}%` }}
         animate={{ width: `${leftPercent}%` }}
+        draggable
+        onDragStartCapture={handleDragStart}
+        onDragOverCapture={(e) => handleDragOver(e, 'left')}
+        onDragLeave={() =>
+          setDragOver((current) => (current === 'left' ? null : current))
+        }
+        onDrop={() => handleDrop('left')}
       >
         {left}
       </motion.div>
@@ -138,7 +198,7 @@ export function SplitPane({
               dragRatio !== null ? 'is-dragging' : ''
             }`}
             aria-label="拖拽调整宽度，双击隐藏左栏"
-            title="拖拽调整宽度 · 双击隐藏 · 中央按钮互换位置"
+            title="拖拽调整宽度 · 双击隐藏"
             onPointerDown={handlePointerDown}
             onDoubleClick={onToggleLeft}
             onHoverStart={() => setIsHovering(true)}
@@ -148,15 +208,6 @@ export function SplitPane({
           >
             <span className="split-pane__grip" />
           </motion.button>
-          <button
-            type="button"
-            className="split-pane__swap"
-            aria-label={isSwapped ? '交换回原位' : '互换左右两栏'}
-            title={isSwapped ? '交换回原位' : '互换左右两栏'}
-            onClick={handleSwap}
-          >
-            <SwapIcon rotated={isSwapped} />
-          </button>
         </div>
       ) : (
         <AnimatePresence>
@@ -185,34 +236,25 @@ export function SplitPane({
       )}
 
       <motion.div
-        className="split-pane__panel split-pane__right"
+        ref={rightRef}
+        className={`split-pane__panel split-pane__right ${
+          dragOver === 'right' ? 'is-drop-target' : ''
+        }`}
         layout
         transition={{
           layout: { duration: SWAP_DURATION, ease: [0.22, 1, 0.36, 1] },
         }}
         style={{ order: rightOrder }}
+        draggable
+        onDragStartCapture={handleDragStart}
+        onDragOverCapture={(e) => handleDragOver(e, 'right')}
+        onDragLeave={() =>
+          setDragOver((current) => (current === 'right' ? null : current))
+        }
+        onDrop={() => handleDrop('right')}
       >
         {right}
       </motion.div>
     </div>
-  )
-}
-
-function SwapIcon({ rotated }: { rotated: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="square"
-      style={{
-        transform: rotated ? 'rotate(180deg)' : 'none',
-        transition: 'transform 0.3s ease',
-      }}
-    >
-      <path d="M3 5h9M9 2l3 3-3 3" />
-      <path d="M13 11H4M7 8 4 11l3 3" />
-    </svg>
   )
 }

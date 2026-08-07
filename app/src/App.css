@@ -974,59 +974,40 @@
   transition: background 0.15s ease;
 }
 
-/* 中央交换按钮（hover 分隔条时显现） */
-.split-pane__swap {
-  position: absolute;
-  z-index: 25;
-  top: 50%;
-  left: 50%;
-  display: grid;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  place-items: center;
-  border: 1px solid #c8d4e8;
-  border-radius: 6px;
-  color: #6680a0;
-  background: #f4f8ff;
+/* header 可拖拽互换面板：header 鼠标变为抓取手 */
+.panel-header,
+.conversation-header {
+  cursor: grab;
+}
+
+.panel-header:active,
+.conversation-header:active {
+  cursor: grabbing;
+}
+
+/* 拖拽放置目标：面板高亮提示可互换 */
+.split-pane__panel.is-drop-target > .workspace-panel {
   box-shadow:
-    0 1px 0 #fff inset,
-    0 2px 0 #d6e1f2,
-    0 3px 6px rgba(72, 104, 144, 0.12);
-  cursor: pointer;
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(0.7);
-  transition:
-    opacity 0.18s ease,
-    transform 0.18s ease,
-    color 0.15s ease,
-    background 0.15s ease,
-    box-shadow 0.15s ease;
+    0 0 0 2px var(--blue) inset,
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 2px 0 #d6e4f5,
+    0 5px 0 rgba(74, 122, 200, 0.08),
+    0 18px 36px rgba(72, 104, 144, 0.16);
 }
 
-.split-pane__handle-slot:hover .split-pane__swap,
-.split-pane__swap:focus-visible {
-  opacity: 1;
-  transform: translate(-50%, -50%) scale(1);
+.split-pane__panel.is-drop-target > .workspace-panel::before {
+  background:
+    linear-gradient(rgba(74, 122, 200, 0.8), rgba(74, 122, 200, 0.8)) top left / 6px 1px no-repeat,
+    linear-gradient(rgba(74, 122, 200, 0.8), rgba(74, 122, 200, 0.8)) top left / 1px 6px no-repeat,
+    linear-gradient(rgba(74, 122, 200, 0.8), rgba(74, 122, 200, 0.8)) top right / 6px 1px no-repeat,
+    linear-gradient(rgba(74, 122, 200, 0.8), rgba(74, 122, 200, 0.8)) top right / 1px 6px no-repeat,
+    linear-gradient(rgba(74, 122, 200, 0.8), rgba(74, 122, 200, 0.8)) bottom left / 6px 1px no-repeat,
+    linear-gradient(rgba(74, 122, 200, 0.8), rgba(74, 122, 200, 0.8)) bottom left / 1px 6px no-repeat,
+    linear-gradient(rgba(74, 122, 200, 0.8), rgba(74, 122, 200, 0.8)) bottom right / 6px 1px no-repeat,
+    linear-gradient(rgba(74, 122, 200, 0.8), rgba(74, 122, 200, 0.8)) bottom right / 1px 6px no-repeat;
 }
 
-.split-pane__swap:hover {
-  color: var(--blue-dark);
-  background: #e7f1ff;
-  box-shadow:
-    0 1px 0 #fff inset,
-    0 2px 0 #b8cdf0,
-    0 4px 10px rgba(72, 104, 144, 0.2);
-}
-
-.split-pane__swap:active {
-  transform: translate(-50%, -50%) scale(0.9);
-}
-
-.split-pane__swap svg {
-  width: 14px;
-  height: 14px;
-}
+/* 拖拽分隔条插槽：竖向容器 */
 
 .split-pane__handle::before {
   content: '';
