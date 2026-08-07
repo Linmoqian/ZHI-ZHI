@@ -956,6 +956,7 @@
 }
 
 /* 分隔条插槽：竖向容器，上下为拖拽热区，中央为交换按钮 */
+/* 两卡片之间的间隙：仅容纳中央的拖拽手柄 */
 .split-pane__handle-slot {
   position: relative;
   z-index: 20;
@@ -963,7 +964,8 @@
   flex: 0 0 auto;
   flex-direction: column;
   align-items: center;
-  width: 14px;
+  justify-content: center;
+  width: 12px;
   height: 100%;
 }
 
@@ -992,19 +994,17 @@
   opacity: 0.96;
 }
 
-/* 拖拽手柄：两栏之间可抓取的分隔条 */
+/* 拖拽手柄：仅中央一个小方块可抓，非整条竖线 */
 .split-pane__handle {
-  position: absolute;
+  position: relative;
   z-index: 20;
-  top: 0;
-  left: 50%;
   width: 12px;
-  height: 100%;
+  height: 12px;
   padding: 0;
-  border: 0;
+ border: 0;
+  border-radius: 3px;
   background: transparent;
   cursor: col-resize;
-  transform: translateX(-50%);
   transition: background 0.15s ease;
 }
 
@@ -1041,46 +1041,34 @@
     linear-gradient(rgba(74, 122, 200, 0.8), rgba(74, 122, 200, 0.8)) bottom right / 1px 6px no-repeat;
 }
 
-/* 拖拽分隔条插槽：竖向容器 */
-
-.split-pane__handle::before {
-  content: '';
+/* 中央水平横线「-」 */
+.split-pane__grip {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 4px;
-  height: 40px;
-  border-radius: 4px;
-  background: #c8d4e8;
+  width: 6px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: #c8c0ae;
   transform: translate(-50%, -50%);
   transition:
     background 0.15s ease,
-    height 0.15s ease,
     width 0.15s ease;
 }
 
-.split-pane__handle.is-hover::before {
+.split-pane__handle.is-hover .split-pane__grip {
   background: var(--blue);
-  height: 56px;
-  width: 5px;
+  width: 8px;
 }
 
-.split-pane__handle.is-dragging::before {
+.split-pane__handle.is-dragging .split-pane__grip {
   background: var(--blue-dark);
-  height: 80%;
+  width: 10px;
 }
 
-.split-pane__handle:hover {
-  background: rgba(74, 122, 200, 0.06);
-}
-
-.split-pane__handle.is-dragging {
-  background: rgba(74, 122, 200, 0.1);
-}
-
-.split-pane__grip {
-  position: absolute;
-  inset: 0;
+.split-pane__handle:hover,
+.split-pane__handle.is-hover {
+  background: rgba(74, 122, 200, 0.08);
 }
 
 /* 面板隐藏后的「显示面板」竖条 */
@@ -1192,47 +1180,6 @@
   margin: 2px 0 0;
   font-size: 20px;
   letter-spacing: -0.03em;
-}
-
-.panel-count {
-  padding: 5px 8px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  color: var(--muted);
-  background: var(--surface);
-  font-size: 9px;
-  font-weight: 800;
-}
-
-.map-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.map-hide-button {
-  display: grid;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  flex: 0 0 auto;
-  place-items: center;
-  border: 1px solid #d6dfeb;
-  border-radius: 4px;
-  color: #6680a0;
-  background: #f1f6fc;
-  box-shadow: 0 2px 0 #d2dce8;
-  cursor: pointer;
-}
-
-.map-hide-button:hover {
-  color: var(--blue-dark);
-  background: #e7f1ff;
-}
-
-.map-hide-button svg {
-  width: 15px;
-  height: 15px;
 }
 
 /* map-reveal-tab 已由 SplitPane 的 split-pane__reveal 替代 */
@@ -2556,7 +2503,6 @@
     display: inline;
   }
 
-  .map-hide-button,
   .split-pane__handle,
   .split-pane__reveal {
     display: none;

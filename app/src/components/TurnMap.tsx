@@ -37,7 +37,6 @@ type TurnMapProps = {
   activeLeafId: string | null
   draftMode: boolean
   onSelectTurn: (turnId: string) => void
-  onHide: () => void
 }
 
 const toneHex: Record<string, string> = {
@@ -83,7 +82,6 @@ function TurnNode({ data, selected }: NodeProps<TurnFlowNode>) {
       </span>
       <span className="pixel-node__copy">
         <strong>{label}</strong>
-        <small>第 {turn.depth + 1} 层</small>
       </span>
       <span
         className="pixel-node__foot pixel-node__foot--left"
@@ -178,7 +176,6 @@ export function TurnMap({
   activeLeafId,
   draftMode,
   onSelectTurn,
-  onHide,
 }: TurnMapProps) {
   const positioned = useMemo(() => computeLayout(turns), [turns])
 
@@ -235,18 +232,6 @@ export function TurnMap({
         <div>
           <span className="eyebrow">CONVERSATION MAP</span>
           <h2>对话地图</h2>
-        </div>
-        <div className="map-header-actions">
-          <button
-            className="map-hide-button"
-            type="button"
-            aria-label="隐藏对话地图"
-            title="隐藏对话地图"
-            onClick={onHide}
-          >
-            <PixelIcon name="chevron-left" />
-          </button>
-          <span className="panel-count">{turns.length} 轮对话</span>
         </div>
       </header>
 

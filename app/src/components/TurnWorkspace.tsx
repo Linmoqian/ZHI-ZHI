@@ -97,7 +97,6 @@ export function TurnWorkspace({
             activeLeafId={activeLeafId}
             draftMode={draftMode}
             onSelectTurn={onSelectTurn}
-            onHide={toggleMap}
           />
         }
         right={
