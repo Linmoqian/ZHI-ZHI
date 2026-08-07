@@ -485,12 +485,14 @@
   transition: transform 0.08s ease, box-shadow 0.08s ease;
 }
 
-.new-conversation-button:hover {
-  transform: translateY(-1px);
-  box-shadow:
-    0 6px 0 #e3dccf,
-    0 12px 0 rgba(95, 82, 61, 0.11),
-    9px 16px 24px rgba(95, 82, 61, 0.1);
+@media (hover: hover) and (pointer: fine) {
+  .new-conversation-button:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      0 6px 0 #e3dccf,
+      0 12px 0 rgba(95, 82, 61, 0.11),
+      9px 16px 24px rgba(95, 82, 61, 0.1);
+  }
 }
 
 .new-conversation-button:active {
@@ -1342,9 +1344,11 @@
   pointer-events: none;
 }
 
-.pixel-node:hover {
-  filter: saturate(1.12) brightness(1.03);
-  transform: translateY(-3px);
+@media (hover: hover) and (pointer: fine) {
+  .pixel-node:hover {
+    filter: saturate(1.12) brightness(1.03);
+    transform: translateY(-3px);
+  }
 }
 
 .pixel-node.is-current {
