@@ -119,6 +119,10 @@ jobs:
           tag_name: ${{ github.ref_name }}
           draft: false
           prerelease: false
+          body: |
+            ${{ github.ref_name }} demo 版本：让知识生长
+
+            知枝是一款可分支、可回溯的 AI 学习助手。
           files: |
             artifacts/**/*.dmg
             artifacts/**/*.exe
