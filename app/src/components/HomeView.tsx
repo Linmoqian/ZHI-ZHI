@@ -73,13 +73,13 @@ function RecentSessionCard({
   return (
     <motion.article
       className={`recent-card tone-${meta.tone}`}
-      whileHover={{ y: -6 }}
+      whileHover={{ transform: 'translateY(-6px)' }}
       transition={{ type: 'spring', stiffness: 380, damping: 26 }}
     >
       <div className="recent-card__heading">
         <motion.span
           className="icon-cube"
-          whileHover={{ rotate: -8, scale: 1.08 }}
+          whileHover={{ transform: 'rotate(-8deg) scale(1.08)' }}
           transition={{ type: 'spring', stiffness: 400, damping: 15 }}
         >
           <PixelIcon name={meta.icon} />

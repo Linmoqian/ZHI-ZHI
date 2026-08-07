@@ -213,7 +213,9 @@ export function SplitPane({
       >
         <motion.div
           className="split-pane__card-inner"
-          animate={{ x: cardDrag?.side === 'left' ? cardDrag.offset : 0 }}
+          animate={{
+            transform: `translateX(${cardDrag?.side === 'left' ? cardDrag.offset : 0}px)`,
+          }}
           transition={
             cardDrag?.side === 'left'
               ? { type: 'spring', stiffness: 500, damping: 40 }
@@ -251,10 +253,10 @@ export function SplitPane({
             aria-label="显示隐藏的面板"
             title="显示面板"
             onClick={onToggleLeft}
-            initial={{ opacity: 0, x: isSwapped ? 8 : -8 }}
-            animate={{ opacity: 1, x: 0 }}
+            initial={{ opacity: 0, transform: `translateX(${isSwapped ? 8 : -8}px)` }}
+            animate={{ opacity: 1, transform: 'translateX(0)' }}
             exit={{ opacity: 0 }}
-            whileHover={{ x: isSwapped ? -2 : 2 }}
+            whileHover={{ transform: `translateX(${isSwapped ? -2 : 2}px)` }}
             transition={{ duration: 0.2 }}
           >
             <span className="split-pane__reveal-icon" aria-hidden="true">
@@ -283,7 +285,9 @@ export function SplitPane({
       >
         <motion.div
           className="split-pane__card-inner"
-          animate={{ x: cardDrag?.side === 'right' ? cardDrag.offset : 0 }}
+          animate={{
+            transform: `translateX(${cardDrag?.side === 'right' ? cardDrag.offset : 0}px)`,
+          }}
           transition={
             cardDrag?.side === 'right'
               ? { type: 'spring', stiffness: 500, damping: 40 }
