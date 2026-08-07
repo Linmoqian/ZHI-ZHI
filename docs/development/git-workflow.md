@@ -28,6 +28,7 @@
 
 - 遵循 Conventional Commits：`<type>(<scope>): <中文描述>`。
 - 描述使用简洁中文，一句话说明具体改动，不使用笼统表述。
+- 提交必须简短短小，一句话概括即可，禁止堆砌多个类型、scope 或长段描述；确保提交信息一眼可读。
 - 常用类型包括 `feat`、`fix`、`docs`、`refactor`、`test`、`build`、`ci` 和 `chore`。
 - 提交信息不得提及 AI、自动生成或模型身份。
 
