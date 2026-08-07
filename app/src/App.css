@@ -576,11 +576,13 @@
   transition: box-shadow 0.25s ease;
 }
 
-.recent-card:hover {
-  box-shadow:
-    0 8px 0 #d4cdbc,
-    8px 16px 0 rgba(90, 78, 58, 0.1),
-    0 18px 32px rgba(72, 58, 40, 0.1);
+@media (hover: hover) and (pointer: fine) {
+  .recent-card:hover {
+    box-shadow:
+      0 8px 0 #d4cdbc,
+      8px 16px 0 rgba(90, 78, 58, 0.1),
+      0 18px 32px rgba(72, 58, 40, 0.1);
+  }
 }
 
 .recent-card__heading {
@@ -733,8 +735,10 @@
   cursor: pointer;
 }
 
-.explore-strip:hover {
-  background: white;
+@media (hover: hover) and (pointer: fine) {
+  .explore-strip:hover {
+    background: white;
+  }
 }
 
 .explore-strip__lead {
@@ -877,9 +881,11 @@
   cursor: pointer;
 }
 
-.back-home-button:hover {
-  color: var(--ink);
-  background: #f2ede4;
+@media (hover: hover) and (pointer: fine) {
+  .back-home-button:hover {
+    color: var(--ink);
+    background: #f2ede4;
+  }
 }
 
 .back-home-button svg {
@@ -1040,10 +1046,12 @@
     border-color 0.15s ease;
 }
 
-.panel-swap-handle:hover {
-  color: var(--blue);
-  background: #eef4ff;
-  border-color: #c4d8f5;
+@media (hover: hover) and (pointer: fine) {
+  .panel-swap-handle:hover {
+    color: var(--blue);
+    background: #eef4ff;
+    border-color: #c4d8f5;
+  }
 }
 
 .panel-swap-handle:active {
@@ -1106,8 +1114,10 @@
   height: 80%;
 }
 
-.split-pane__handle:hover {
-  background: rgba(74, 122, 200, 0.06);
+@media (hover: hover) and (pointer: fine) {
+  .split-pane__handle:hover {
+    background: rgba(74, 122, 200, 0.06);
+  }
 }
 
 .split-pane__handle.is-dragging {
@@ -1145,15 +1155,17 @@
   backdrop-filter: blur(10px);
 }
 
-.split-pane__reveal:hover {
-  background: rgba(231, 241, 255, 0.95);
-  box-shadow:
-    0 2px 0 #d6e4f5,
-    0 10px 22px rgba(72, 104, 144, 0.12);
-}
+@media (hover: hover) and (pointer: fine) {
+  .split-pane__reveal:hover {
+    background: rgba(231, 241, 255, 0.95);
+    box-shadow:
+      0 2px 0 #d6e4f5,
+      0 10px 22px rgba(72, 104, 144, 0.12);
+  }
 
-.split-pane__reveal:hover {
-  background: rgba(231, 241, 255, 0.9);
+  .split-pane__reveal:hover {
+    background: rgba(231, 241, 255, 0.9);
+  }
 }
 
 .split-pane__reveal-icon {
@@ -1459,8 +1471,10 @@
   background: var(--surface) !important;
 }
 
-.branch-controls button:hover {
-  background: #eee8dd !important;
+@media (hover: hover) and (pointer: fine) {
+  .branch-controls button:hover {
+    background: #eee8dd !important;
+  }
 }
 
 .learning-path-overview {
@@ -1695,9 +1709,11 @@
   cursor: pointer;
 }
 
-.learning-guide__minimize:hover {
-  color: var(--ink);
-  background: rgba(255, 255, 255, 0.72);
+@media (hover: hover) and (pointer: fine) {
+  .learning-guide__minimize:hover {
+    color: var(--ink);
+    background: rgba(255, 255, 255, 0.72);
+  }
 }
 
 .learning-guide__restore {
@@ -2108,10 +2124,12 @@
   color: var(--purple);
 }
 
-.round-clone-button:hover {
-  border-color: #b9a7e8;
-  color: var(--ink);
-  background: #f4f0ff;
+@media (hover: hover) and (pointer: fine) {
+  .round-clone-button:hover {
+    border-color: #b9a7e8;
+    color: var(--ink);
+    background: #f4f0ff;
+  }
 }
 
 .round-clone-button:disabled {
@@ -2208,10 +2226,12 @@
   cursor: pointer;
 }
 
-.quick-prompts button:hover:not(:disabled) {
-  border-color: #a9c2e5;
-  color: var(--blue-dark);
-  background: #f0f6ff;
+@media (hover: hover) and (pointer: fine) {
+  .quick-prompts button:hover:not(:disabled) {
+    border-color: #a9c2e5;
+    color: var(--blue-dark);
+    background: #f0f6ff;
+  }
 }
 
 .message-composer {
