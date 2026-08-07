@@ -68,7 +68,7 @@ export function TurnConversation({
 
   return (
     <section
-      className="workspace-panel conversation-panel has-learning-guide"
+      className="workspace-panel conversation-panel"
       aria-label="当前对话支线"
     >
       <header className="conversation-header">
