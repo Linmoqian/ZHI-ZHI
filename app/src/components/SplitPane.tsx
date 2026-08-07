@@ -173,12 +173,21 @@ export function SplitPane({
         className={`split-pane__panel split-pane__left ${
           dragOver === 'left' ? 'is-drop-target' : ''
         }`}
-        layout
+        layout={dragRatio === null}
         transition={{
           layout: { duration: SWAP_DURATION, ease: [0.22, 1, 0.36, 1] },
         }}
-        style={{ order: leftOrder, width: `${leftPercent}%` }}
-        animate={{ width: `${leftPercent}%` }}
+        style={{
+          order: leftOrder,
+          // 拖拽中直接跟随指针（inline style，无过渡）；
+          // 非拖拽时交给 motion animate 做卡片变形动画。
+          ...(dragRatio !== null
+            ? { width: `${leftPercent}%`, transition: 'none' }
+            : {}),
+        }}
+        animate={
+          dragRatio === null ? { width: `${leftPercent}%` } : false
+        }
         draggable
         onDragStartCapture={handleDragStart}
         onDragOverCapture={(e) => handleDragOver(e, 'left')}
@@ -240,7 +249,7 @@ export function SplitPane({
         className={`split-pane__panel split-pane__right ${
           dragOver === 'right' ? 'is-drop-target' : ''
         }`}
-        layout
+        layout={dragRatio === null}
         transition={{
           layout: { duration: SWAP_DURATION, ease: [0.22, 1, 0.36, 1] },
         }}
