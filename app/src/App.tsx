@@ -3,79 +3,41 @@ import {
   Suspense,
   useCallback,
   useEffect,
-  useMemo,
   useState,
 } from 'react'
 import './App.css'
 import { HomeView } from './components/HomeView'
 import { NavRail } from './components/NavRail'
-import {
-  createInitialMessages,
-  createInitialNodes,
-  DEFAULT_TOPIC,
-} from './data'
 import { emitDebugEvent } from './lib/debugBus'
-import {
-  learningApi,
-  LearningApiError,
-} from './services/learningApi'
+import { turnApi } from './services/turnApi'
+import { LearningApiError } from './services/apiError'
 import type {
   AppView,
-  CanvasPosition,
-  ContextMode,
-  LearningNode,
-  Message,
-  NodeAction,
-  SessionSummary,
+  TurnDTO,
+  TurnSessionSummary,
   WorkspacePanel,
 } from './types'
 
-const WorkspaceView = lazy(() =>
-  import('./components/WorkspaceView').then((module) => ({
-    default: module.WorkspaceView,
+const TurnWorkspace = lazy(() =>
+  import('./components/TurnWorkspace').then((module) => ({
+    default: module.TurnWorkspace,
   })),
 )
 
-const createLocalId = (prefix: string) =>
-  `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
-
 function App() {
   const [view, setView] = useState<AppView>('home')
+  // 草稿模式：已进入工作区但尚未创建会话；用户首次输入时才建会话。
+  const [draftMode, setDraftMode] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
-  const [topic, setTopic] = useState(DEFAULT_TOPIC)
-  const [nodes, setNodes] = useState<LearningNode[]>(() =>
-    createInitialNodes(DEFAULT_TOPIC),
-  )
-  const [messages, setMessages] = useState<Message[]>(() =>
-    createInitialMessages(DEFAULT_TOPIC),
-  )
-  const [currentNodeId, setCurrentNodeId] = useState('self-attention')
+  const [turns, setTurns] = useState<TurnDTO[]>([])
+  const [activeLeafId, setActiveLeafId] = useState<string | null>(null)
   const [currentPanel, setCurrentPanel] =
     useState<WorkspacePanel>('conversation')
-  const [isSessionStarting, setIsSessionStarting] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
-  const [recentSessions, setRecentSessions] = useState<SessionSummary[]>([])
+  const [recentSessions, setRecentSessions] = useState<
+    TurnSessionSummary[]
+  >([])
   const [toast, setToast] = useState('')
-
-  const currentNode = useMemo(
-    () => nodes.find((node) => node.id === currentNodeId) ?? nodes[0],
-    [currentNodeId, nodes],
-  )
-
-  // 拉取真实会话列表填充“最近学习”。
-  const refreshSessions = useCallback(async () => {
-    try {
-      const { sessions } = await learningApi.listSessions()
-      setRecentSessions(sessions)
-    } catch {
-      // 后端不可用时保留空列表，由后续操作兜底提示。
-      setRecentSessions([])
-    }
-  }, [])
-
-  useEffect(() => {
-    void refreshSessions()
-  }, [refreshSessions])
 
   useEffect(() => {
     if (!toast) {
@@ -100,73 +62,58 @@ function App() {
     [showToast],
   )
 
+  const refreshSessions = useCallback(async () => {
+    try {
+      const { sessions } = await turnApi.listSessions()
+      setRecentSessions(sessions)
+    } catch {
+      setRecentSessions([])
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshSessions()
+  }, [refreshSessions])
+
   const goHome = useCallback(() => {
     setView('home')
+    setDraftMode(false)
     emitDebugEvent('view:change', { view: 'home' })
   }, [])
 
-  const startLearning = useCallback(
-    async (nextTopic: string) => {
-      if (isSessionStarting) {
-        return
-      }
-      const normalizedTopic = nextTopic.trim() || DEFAULT_TOPIC
-      setIsSessionStarting(true)
+  /** 点击首页加号：进入空白工作区（草稿模式），不创建会话。 */
+  const startNewConversation = useCallback(() => {
+    setSessionId(null)
+    setTurns([])
+    setActiveLeafId(null)
+    setDraftMode(true)
+    setCurrentPanel('conversation')
+    setIsGenerating(false)
+    setView('workspace')
+    emitDebugEvent('view:change', { view: 'workspace', source: 'draft' })
+  }, [])
 
-      try {
-        const { session } = await learningApi.createSession(normalizedTopic)
-        const activeNode =
-          session.nodes.find((node) => node.status === 'current') ??
-          session.nodes[0]
-
-        setSessionId(session.id)
-        setTopic(session.topic)
-        setNodes(session.nodes)
-        setMessages(session.messages)
-        setCurrentNodeId(activeNode.id)
-        setCurrentPanel('conversation')
-        setIsGenerating(false)
-        setView('workspace')
-        emitDebugEvent('view:change', {
-          view: 'workspace',
-          source: 'backend-session',
-          sessionId: session.id,
-          topic: session.topic,
-        })
-        void refreshSessions()
-      } catch (error) {
-        showApiError(error)
-      } finally {
-        setIsSessionStarting(false)
-      }
-    },
-    [isSessionStarting, refreshSessions, showApiError],
-  )
-
+  /** 恢复已有会话：加载完整回合树，定位到最深叶回合。 */
   const resumeSession = useCallback(
     async (sessionIdToResume: string) => {
       setView('workspace')
       try {
-        const { session } = await learningApi.getSession(sessionIdToResume)
-        const activeNode =
-          session.nodes.find((node) => node.status === 'current') ??
-          session.nodes[0]
-
+        const { session } = await turnApi.getSession(sessionIdToResume)
         setSessionId(session.id)
-        setTopic(session.topic)
-        setNodes(session.nodes)
-        setMessages(session.messages)
-        setCurrentNodeId(activeNode?.id ?? '')
+        setTurns(session.turns)
+        // 默认定位到创建时间最新的叶回合
+        const leaf = [...session.turns]
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
+        setActiveLeafId(leaf?.id ?? null)
+        setDraftMode(false)
         setCurrentPanel('conversation')
         setIsGenerating(false)
         emitDebugEvent('view:change', {
           view: 'workspace',
-          source: 'resume-session',
+          source: 'resume',
           sessionId: session.id,
-          topic: session.topic,
         })
       } catch (error) {
-        // 会话已不存在或后端不可用时回到首页并提示。
         setView('home')
         showApiError(error)
       }
@@ -175,331 +122,115 @@ function App() {
   )
 
   const goWorkspace = useCallback(() => {
-    if (!sessionId) {
-      void startLearning(topic)
+    if (!sessionId && !draftMode) {
+      startNewConversation()
       return
     }
     setView('workspace')
     setCurrentPanel('conversation')
-    emitDebugEvent('view:change', { view: 'workspace', sessionId })
-  }, [sessionId, startLearning, topic])
+  }, [sessionId, draftMode, startNewConversation])
 
-  const selectNode = useCallback((nodeId: string) => {
-    setNodes((currentNodes) =>
-      currentNodes.map((node) => {
-        if (node.id === nodeId && node.status === 'exploring') {
-          return { ...node, status: 'current' }
-        }
-        if (node.id !== nodeId && node.status === 'current') {
-          return { ...node, status: 'exploring' }
-        }
-        return node
-      }),
-    )
-    setCurrentNodeId(nodeId)
-    setCurrentPanel('conversation')
-    emitDebugEvent('node:select', { nodeId })
-  }, [])
-
-  const moveNode = useCallback(
-    (nodeId: string, position: CanvasPosition) => {
-      setNodes((currentNodes) =>
-        currentNodes.map((node) =>
-          node.id === nodeId ? { ...node, position } : node,
-        ),
-      )
-    },
-    [],
-  )
-
+  /**
+   * 发送消息：
+   * - 草稿模式（无会话）：首次输入创建根回合
+   * - 已有会话：在当前活跃叶回合后追加子回合（生长）
+   */
   const sendMessage = useCallback(
     async (content: string) => {
-      const normalizedContent = content.trim()
-      if (
-        !normalizedContent ||
-        isGenerating ||
-        !currentNode ||
-        !sessionId
-      ) {
+      const normalized = content.trim()
+      if (!normalized || isGenerating) {
         return
       }
 
-      const targetNodeId = currentNode.id
-      const optimisticId = createLocalId('message-pending')
-      const optimisticMessage: Message = {
-        id: optimisticId,
-        nodeId: targetNodeId,
-        role: 'user',
-        content: normalizedContent,
-        createdAt: '刚刚',
-      }
-
-      setMessages((currentMessages) => [
-        ...currentMessages,
-        optimisticMessage,
-      ])
       setIsGenerating(true)
       emitDebugEvent('message:send', {
         sessionId,
-        nodeId: targetNodeId,
-        contentLength: normalizedContent.length,
+        contentLength: normalized.length,
       })
 
       try {
-        const result = await learningApi.sendMessage(
-          sessionId,
-          targetNodeId,
-          normalizedContent,
-        )
-        setMessages((currentMessages) => [
-          ...currentMessages.filter(
-            (message) => message.id !== optimisticId,
-          ),
-          result.userMessage,
-          result.assistantMessage,
-        ])
-        // 后端基于本轮输入重新概括了节点 summary，同步刷新地图与学习目标。
-        if (result.updatedNode) {
-          setNodes((currentNodes) =>
-            replaceNode(currentNodes, result.updatedNode!),
+        if (draftMode || !sessionId) {
+          // 首次输入：创建会话（根回合）
+          const { session } = await turnApi.createSession(normalized)
+          setSessionId(session.id)
+          setTurns(session.turns)
+          const root = session.turns[0]
+          setActiveLeafId(root.id)
+          setDraftMode(false)
+          emitDebugEvent('turn:create', {
+            sessionId: session.id,
+            turnId: root.id,
+          })
+        } else if (activeLeafId) {
+          // 后续输入：追加回合
+          const { turn } = await turnApi.appendTurn(
+            sessionId,
+            activeLeafId,
+            normalized,
           )
+          setTurns((current) => [...current, turn])
+          setActiveLeafId(turn.id)
+          emitDebugEvent('turn:append', {
+            sessionId,
+            turnId: turn.id,
+            parentId: activeLeafId,
+          })
         }
-        emitDebugEvent('context:compiled', {
-          nodeId: targetNodeId,
-          ...result.contextTrace,
-        })
+        void refreshSessions()
       } catch (error) {
-        setMessages((currentMessages) =>
-          currentMessages.filter(
-            (message) => message.id !== optimisticId,
-          ),
-        )
         showApiError(error)
       } finally {
         setIsGenerating(false)
       }
     },
-    [currentNode, isGenerating, sessionId, showApiError],
+    [
+      activeLeafId,
+      draftMode,
+      isGenerating,
+      refreshSessions,
+      sessionId,
+      showApiError,
+    ],
   )
 
-  const createBranch = useCallback(
-    async (nodeId: string) => {
-      if (!sessionId) {
-        showToast('请先创建学习会话')
+  /** 从指定回合分叉出新子回合（成为兄弟）。 */
+  const forkTurn = useCallback(
+    async (parentTurnId: string, content: string) => {
+      const normalized = content.trim()
+      if (!normalized || !sessionId || isGenerating) {
         return
       }
-
+      setIsGenerating(true)
       try {
-        const result = await learningApi.createBranch(
+        const { turn } = await turnApi.forkTurn(
           sessionId,
-          nodeId,
-          'isolated',
+          parentTurnId,
+          normalized,
         )
-        setNodes((currentNodes) => [
-          ...currentNodes.map((node) => {
-            if (node.id === result.sourceNode.id) {
-              return result.sourceNode
-            }
-            return node.status === 'current'
-              ? { ...node, status: 'exploring' as const }
-              : node
-          }),
-          result.node,
-        ])
-        setMessages((currentMessages) => [
-          ...currentMessages,
-          result.message,
-        ])
-        setCurrentNodeId(result.node.id)
-        setCurrentPanel('conversation')
-        showToast('隔离分支已创建')
-        emitDebugEvent('node:create', {
-          nodeId: result.node.id,
-          parentId: result.node.parentId,
-          contextMode: result.node.contextMode,
+        setTurns((current) => [...current, turn])
+        setActiveLeafId(turn.id)
+        showToast('已分叉出新的对话支线')
+        emitDebugEvent('turn:fork', {
+          sessionId,
+          turnId: turn.id,
+          parentId: parentTurnId,
         })
+        void refreshSessions()
       } catch (error) {
         showApiError(error)
+      } finally {
+        setIsGenerating(false)
       }
     },
-    [sessionId, showApiError, showToast],
+    [isGenerating, refreshSessions, sessionId, showApiError, showToast],
   )
 
-  const cloneBranch = useCallback(
-    async (nodeId: string) => {
-      if (!sessionId) {
-        showToast('请先创建学习会话')
-        return
-      }
-
-      try {
-        const result = await learningApi.cloneBranch(sessionId, nodeId)
-        setNodes((currentNodes) => [
-          ...currentNodes.map((node) => {
-            if (node.id === result.sourceNode.id) {
-              return result.sourceNode
-            }
-            return node.status === 'current'
-              ? { ...node, status: 'exploring' as const }
-              : node
-          }),
-          result.node,
-        ])
-        setMessages((currentMessages) => [
-          ...currentMessages,
-          result.message,
-        ])
-        setCurrentNodeId(result.node.id)
-        setCurrentPanel('conversation')
-        showToast('已克隆出新的分支，继续深入')
-        emitDebugEvent('node:clone', {
-          nodeId: result.node.id,
-          parentId: result.node.parentId,
-        })
-      } catch (error) {
-        showApiError(error)
-      }
-    },
-    [sessionId, showApiError, showToast],
-  )
-
-  const returnToParent = useCallback(
-    (nodeId: string) => {
-      const sourceNode = nodes.find((node) => node.id === nodeId)
-      if (!sourceNode?.parentId) {
-        return
-      }
-      const parentId = sourceNode.parentId
-
-      setNodes((currentNodes) =>
-        currentNodes.map((node) => {
-          if (node.id === sourceNode.id && node.status === 'current') {
-            return { ...node, status: 'exploring' }
-          }
-          if (node.id === parentId && node.status === 'exploring') {
-            return { ...node, status: 'current' }
-          }
-          return node
-        }),
-      )
-      setCurrentNodeId(parentId)
-      setCurrentPanel('conversation')
-      showToast('已返回父节点')
-      emitDebugEvent('node:select', {
-        nodeId: parentId,
-        source: 'parent',
-      })
-    },
-    [nodes, showToast],
-  )
-
-  const mergeToParent = useCallback(
-    async (nodeId: string) => {
-      if (!sessionId) {
-        showToast('请先创建学习会话')
-        return
-      }
-
-      try {
-        const result = await learningApi.mergeBranch(sessionId, nodeId)
-        setNodes((currentNodes) =>
-          currentNodes.map((node) => {
-            if (node.id === result.sourceNode.id) {
-              return result.sourceNode
-            }
-            if (node.id === result.parentNode.id) {
-              return result.parentNode
-            }
-            return node
-          }),
-        )
-        setMessages((currentMessages) => [
-          ...currentMessages,
-          result.message,
-        ])
-        setCurrentNodeId(result.parentNode.id)
-        setCurrentPanel('conversation')
-        showToast('分支结论已安全合并')
-        emitDebugEvent('node:merge', {
-          nodeId: result.sourceNode.id,
-          parentId: result.parentNode.id,
-        })
-      } catch (error) {
-        showApiError(error)
-      }
-    },
-    [sessionId, showApiError, showToast],
-  )
-
-  const markMastered = useCallback(
-    async (nodeId: string) => {
-      if (!sessionId) {
-        showToast('请先创建学习会话')
-        return
-      }
-
-      try {
-        const result = await learningApi.updateNode(sessionId, nodeId, {
-          status: 'mastered',
-        })
-        setNodes((currentNodes) =>
-          replaceNode(currentNodes, result.node),
-        )
-        showToast('已标记为掌握')
-        emitDebugEvent('node:update', {
-          nodeId,
-          status: 'mastered',
-        })
-      } catch (error) {
-        showApiError(error)
-      }
-    },
-    [sessionId, showApiError, showToast],
-  )
-
-  const changeContextMode = useCallback(
-    async (nodeId: string, mode: ContextMode) => {
-      if (!sessionId) {
-        showToast('请先创建学习会话')
-        return
-      }
-
-      try {
-        const result = await learningApi.updateNode(sessionId, nodeId, {
-          contextMode: mode,
-        })
-        setNodes((currentNodes) =>
-          replaceNode(currentNodes, result.node),
-        )
-        showToast(
-          mode === 'inherit'
-            ? '已继承创建时的父节点快照'
-            : '已隔离父节点与同级分支',
-        )
-        emitDebugEvent('node:update', { nodeId, contextMode: mode })
-      } catch (error) {
-        showApiError(error)
-      }
-    },
-    [sessionId, showApiError, showToast],
-  )
-
-  const handleNodeAction = useCallback(
-    (nodeId: string, action: NodeAction) => {
-      if (action === 'create-branch') {
-        void createBranch(nodeId)
-      } else if (action === 'clone-branch') {
-        void cloneBranch(nodeId)
-      } else if (action === 'merge-parent') {
-        void mergeToParent(nodeId)
-      } else if (action === 'return-parent') {
-        returnToParent(nodeId)
-      } else {
-        void markMastered(nodeId)
-      }
-    },
-    [cloneBranch, createBranch, markMastered, mergeToParent, returnToParent],
-  )
+  /** 选中某个回合：切换活跃叶（切换可见的对话支线）。 */
+  const selectTurn = useCallback((turnId: string) => {
+    setActiveLeafId(turnId)
+    setCurrentPanel('conversation')
+    emitDebugEvent('turn:select', { turnId })
+  }, [])
 
   return (
     <div className={`app-shell view-${view}`}>
@@ -511,13 +242,10 @@ function App() {
       />
       {view === 'home' ? (
         <HomeView
-          isStarting={isSessionStarting}
           recentSessions={recentSessions}
-          onStartLearning={(nextTopic) => {
-            void startLearning(nextTopic)
-          }}
-          onContinueSession={(sessionIdToResume) => {
-            void resumeSession(sessionIdToResume)
+          onNewConversation={startNewConversation}
+          onContinueSession={(id) => {
+            void resumeSession(id)
           }}
         />
       ) : (
@@ -529,23 +257,20 @@ function App() {
             </main>
           }
         >
-          <WorkspaceView
-            topic={topic}
-            nodes={nodes}
-            messages={messages}
-            currentNode={currentNode}
+          <TurnWorkspace
+            turns={turns}
+            activeLeafId={activeLeafId}
+            draftMode={draftMode}
             currentPanel={currentPanel}
             isGenerating={isGenerating}
             onPanelChange={setCurrentPanel}
             onBackHome={goHome}
-            onSelectNode={selectNode}
-            onMoveNode={moveNode}
-            onNodeAction={handleNodeAction}
+            onSelectTurn={selectTurn}
             onSendMessage={(content) => {
               void sendMessage(content)
             }}
-            onContextModeChange={(nodeId, mode) => {
-              void changeContextMode(nodeId, mode)
+            onForkTurn={(turnId, content) => {
+              void forkTurn(turnId, content)
             }}
           />
         </Suspense>
@@ -555,16 +280,12 @@ function App() {
         role="status"
         aria-live="polite"
       >
-        <span><PixelToastIcon /></span>
+        <span>
+          <PixelToastIcon />
+        </span>
         {toast}
       </div>
     </div>
-  )
-}
-
-function replaceNode(nodes: LearningNode[], updatedNode: LearningNode) {
-  return nodes.map((node) =>
-    node.id === updatedNode.id ? updatedNode : node,
   )
 }
 

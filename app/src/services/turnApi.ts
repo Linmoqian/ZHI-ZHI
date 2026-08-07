@@ -11,7 +11,7 @@ import type {
   TurnSessionDTO,
   UpdateTurnResponse,
 } from '../../shared/contracts'
-import { LearningApiError } from './learningApi'
+import { LearningApiError } from './apiError'
 
 async function request<T extends object>(path: string, init: RequestInit) {
   let response: Response

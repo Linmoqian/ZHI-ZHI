@@ -1,27 +1,17 @@
-import { useState, type FormEvent } from 'react'
-import type { NodeTone, PixelIconName, SessionSummary } from '../types'
+import type { PixelIconName, TurnSessionSummary } from '../types'
 import { PixelIcon } from './PixelIcon'
 
 type HomeViewProps = {
-  onStartLearning: (topic: string) => void
-  isStarting: boolean
-  recentSessions: SessionSummary[]
+  onNewConversation: () => void
+  recentSessions: TurnSessionSummary[]
   onContinueSession: (sessionId: string) => void
 }
 
-const toneSteps: NodeTone[] = [
-  'blue',
-  'green',
-  'orange',
-  'purple',
-  'blue',
-]
-
-const cardTones: NodeTone[] = ['blue', 'green', 'purple']
-const cardIcons: PixelIconName[] = ['brain', 'leaf', 'atom']
+const cardTones = ['blue', 'green', 'purple', 'orange'] as const
+const cardIcons: PixelIconName[] = ['brain', 'leaf', 'atom', 'compass']
 
 type CardMeta = {
-  tone: NodeTone
+  tone: (typeof cardTones)[number]
   icon: PixelIconName
 }
 
@@ -50,13 +40,17 @@ function TopicIllustration() {
   )
 }
 
-function ProjectPreview({ tone }: { tone: NodeTone }) {
+function ConversationPreview({
+  tone,
+}: {
+  tone: (typeof cardTones)[number]
+}) {
   return (
     <div className={`project-preview tone-${tone}`} aria-hidden="true">
       <svg viewBox="0 0 240 112">
-        <path d="M70 55h60V25h42" />
-        <path d="M130 55h55" />
-        <path d="M130 55v34h42" />
+        <path d="M40 56h60V25h42" />
+        <path d="M100 56h55" />
+        <path d="M100 56v34h42" />
       </svg>
       <i className="preview-node preview-node--hub" />
       <i className="preview-node preview-node--a" />
@@ -66,25 +60,15 @@ function ProjectPreview({ tone }: { tone: NodeTone }) {
   )
 }
 
-const PROGRESS_SEGMENTS = 9
-
 function RecentSessionCard({
   session,
   meta,
   onContinue,
 }: {
-  session: SessionSummary
+  session: TurnSessionSummary
   meta: CardMeta
   onContinue: () => void
 }) {
-  // 用真实完成节点占节点总数的比例，映射到固定段数的进度条。
-  const filledSegments =
-    session.nodeCount > 0
-      ? Math.round(
-          (session.completedNodes / session.nodeCount) * PROGRESS_SEGMENTS,
-        )
-      : 0
-
   return (
     <article className={`recent-card tone-${meta.tone}`}>
       <div className="recent-card__heading">
@@ -92,25 +76,17 @@ function RecentSessionCard({
           <PixelIcon name={meta.icon} />
         </span>
         <div>
-          <span>学习路径</span>
+          <span>对话路径</span>
           <h3>{session.topic}</h3>
         </div>
       </div>
 
-      <ProjectPreview tone={meta.tone} />
+      <ConversationPreview tone={meta.tone} />
 
       <div className="recent-card__footer">
-        <div
-          className="pixel-progress"
-          aria-label={`学习进度 ${session.completedNodes}/${session.nodeCount}`}
-        >
-          {Array.from({ length: PROGRESS_SEGMENTS }, (_, index) => (
-            <i
-              className={index < filledSegments ? 'is-filled' : ''}
-              key={index}
-            />
-          ))}
-        </div>
+        <span className="recent-card__count">
+          {session.turnCount} 轮对话
+        </span>
         <button
           className="continue-button pixel-press"
           type="button"
@@ -125,21 +101,10 @@ function RecentSessionCard({
 }
 
 export function HomeView({
-  onStartLearning,
-  isStarting,
+  onNewConversation,
   recentSessions,
   onContinueSession,
 }: HomeViewProps) {
-  const [topic, setTopic] = useState('')
-
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const normalizedTopic = topic.trim()
-    if (normalizedTopic) {
-      onStartLearning(normalizedTopic)
-    }
-  }
-
   return (
     <main className="home-view">
       <div className="home-view__content">
@@ -155,33 +120,23 @@ export function HomeView({
           <TopicIllustration />
         </header>
 
-        <form
-          className="learning-prompt pixel-panel"
-          aria-busy={isStarting}
-          onSubmit={handleSubmit}
+        <button
+          type="button"
+          className="learning-prompt pixel-panel new-conversation-button pixel-press"
+          onClick={onNewConversation}
+          aria-label="新建对话"
         >
           <span className="learning-prompt__icon">
             <PixelIcon name="plus" />
           </span>
-          <label htmlFor="learning-topic">今天想学什么？</label>
-          <input
-            id="learning-topic"
-            data-testid="learning-input"
-            value={topic}
-            onChange={(event) => setTopic(event.target.value)}
-            placeholder="输入一个问题或概念…"
-            autoComplete="off"
-            disabled={isStarting}
-          />
-          <button
-            className="learning-prompt__submit pixel-press"
-            type="submit"
-            aria-label={isStarting ? '正在创建学习空间' : '开始学习'}
-            disabled={!topic.trim() || isStarting}
-          >
+          <span className="new-conversation-button__label">
+            <strong>新建对话</strong>
+            <small>从一个问题出发，让知识随对话生长</small>
+          </span>
+          <span className="learning-prompt__submit">
             <PixelIcon name="arrow" />
-          </button>
-        </form>
+          </span>
+        </button>
 
         <section className="recent-section" aria-labelledby="recent-title">
           <div className="section-heading">
@@ -189,7 +144,9 @@ export function HomeView({
               <span className="eyebrow">CONTINUE EXPLORING</span>
               <h2 id="recent-title">最近学习</h2>
             </div>
-            <span>{recentSessions.length} 条正在生长的知识路径</span>
+            <span>
+              {recentSessions.length} 条正在生长的对话路径
+            </span>
           </div>
 
           {recentSessions.length > 0 ? (
@@ -205,32 +162,10 @@ export function HomeView({
             </div>
           ) : (
             <div className="recent-empty">
-              还没有学习会话，从上面的输入框开始你的第一课。
+              还没有对话，点击上方「新建对话」开始你的第一次提问。
             </div>
           )}
         </section>
-
-        <button
-          className="explore-strip pixel-panel"
-          type="button"
-          onClick={() => onStartLearning('沿着好奇心，探索一个新的知识分支')}
-        >
-          <span className="explore-strip__lead">
-            <span className="icon-cube tone-orange">
-              <PixelIcon name="compass" />
-            </span>
-            <span>
-              <strong>探索分支</strong>
-              <small>从一个问题出发，让知识自由生长</small>
-            </span>
-          </span>
-          <span className="explore-path" aria-hidden="true">
-            {toneSteps.map((tone, index) => (
-              <i className={`tone-${tone}`} key={`${tone}-${index}`} />
-            ))}
-          </span>
-          <PixelIcon name="arrow" />
-        </button>
       </div>
     </main>
   )
