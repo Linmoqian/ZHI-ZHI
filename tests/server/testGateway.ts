@@ -15,5 +15,10 @@ export function createFakeGateway(reply = '测试回复'): ModelGateway {
     summarize(_content: string): Promise<string> {
       return Promise.resolve(reply)
     },
+    testConnection(): Promise<
+      { ok: true; message: string } | { ok: false; message: string }
+    > {
+      return Promise.resolve({ ok: true, message: '测试网关连通' })
+    },
   }
 }

@@ -7,6 +7,7 @@ import {
   type KeyboardEvent,
 } from 'react'
 import { PixelIcon } from './PixelIcon'
+import { MarkdownContent } from './MarkdownContent'
 import { pathFromRoot } from '../lib/turnTree'
 import type { TurnDTO } from '../types'
 
@@ -17,6 +18,10 @@ type TurnConversationProps = {
   isGenerating: boolean
   onSendMessage: (content: string) => void
   onForkTurn: (parentTurnId: string, content: string) => void
+  /** 待定分叉的父回合 id；非空时输入框进入「新链生长」态。 */
+  forkParentId: string | null
+  onBeginFork: (parentTurnId: string) => void
+  onCancelFork: () => void
 }
 
 const quickPrompts = ['换个直觉类比', '给我一个最小例子', '检查我的理解']
@@ -28,6 +33,9 @@ export function TurnConversation({
   isGenerating,
   onSendMessage,
   onForkTurn,
+  forkParentId,
+  onBeginFork,
+  onCancelFork,
 }: TurnConversationProps) {
   const [draft, setDraft] = useState('')
   const messageEndRef = useRef<HTMLDivElement>(null)
@@ -46,7 +54,12 @@ export function TurnConversation({
     if (!content || isGenerating) {
       return
     }
-    onSendMessage(content)
+    if (forkParentId) {
+      // 待定分叉态：提交即从该父回合长出新链
+      onForkTurn(forkParentId, content)
+    } else {
+      onSendMessage(content)
+    }
     setDraft('')
   }
 
@@ -59,12 +72,21 @@ export function TurnConversation({
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
       submitDraft()
+      return
+    }
+    // 待定分叉态：Esc 取消分叉，回到普通持续追问
+    if (event.key === 'Escape' && forkParentId) {
+      event.preventDefault()
+      setDraft('')
+      onCancelFork()
     }
   }
 
   const placeholder = draftMode
     ? '提出你的第一个问题，对话将从这里开始生长…'
-    : '继续追问，或把不懂的地方拆成新的支线…'
+    : forkParentId
+      ? '新链生长：输入新问题，将从上个回合长出分叉…'
+      : '继续追问，或把不懂的地方拆成新的支线…'
 
   return (
     <section
@@ -120,7 +142,7 @@ export function TurnConversation({
                       <strong>你</strong>
                       <span>{turn.createdAt}</span>
                     </div>
-                    <p>{turn.userContent}</p>
+                    <MarkdownContent markdown={turn.userContent} className="message__text" />
                   </div>
                 </article>
                 <article className="message message--assistant">
@@ -132,7 +154,7 @@ export function TurnConversation({
                       <strong>知枝</strong>
                       <span>{turn.createdAt}</span>
                     </div>
-                    <p>{turn.assistantContent}</p>
+                    <MarkdownContent markdown={turn.assistantContent} className="message__text" />
                   </div>
                 </article>
                 {!isLastTurn ? (
@@ -144,14 +166,9 @@ export function TurnConversation({
                     <button
                       type="button"
                       className="round-clone-button"
-                      disabled={isGenerating}
+                      disabled={isGenerating || forkParentId !== null}
                       title="从这一轮分叉出一条新的对话支线"
-                      onClick={() => {
-                        const content = window.prompt('从这一轮分叉，输入你的新问题')
-                        if (content?.trim()) {
-                          onForkTurn(turn.id, content)
-                        }
-                      }}
+                      onClick={() => onBeginFork(turn.id)}
                     >
                       <PixelIcon name="branch" />
                       从此处分叉新支线
@@ -182,7 +199,7 @@ export function TurnConversation({
       </div>
 
       <footer className="composer-area">
-        {!draftMode && (
+        {!draftMode && !forkParentId && (
           <div className="quick-prompts" aria-label="快捷提问">
             {quickPrompts.map((prompt) => (
               <button
@@ -196,9 +213,32 @@ export function TurnConversation({
             ))}
           </div>
         )}
+        {!draftMode && forkParentId && (
+          <div className="fork-start-banner">
+            <PixelIcon name="branch" />
+            <span>正在为新支线生长做准备，输入内容即以新链继续</span>
+            <button
+              type="button"
+              className="fork-cancel-button"
+              onClick={() => {
+                setDraft('')
+                onCancelFork()
+              }}
+            >
+              <PixelIcon name="close" />
+              取消分叉
+            </button>
+          </div>
+        )}
         <form className="message-composer" onSubmit={handleSubmit}>
           <textarea
-            aria-label={draftMode ? '提出第一个问题' : '继续对话'}
+            aria-label={
+              draftMode
+                ? '提出第一个问题'
+                : forkParentId
+                  ? '新链生长，输入新问题'
+                  : '继续对话'
+            }
             placeholder={placeholder}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -206,11 +246,15 @@ export function TurnConversation({
             rows={2}
           />
           <div className="composer-actions">
-            <span>Enter 发送 · Shift + Enter 换行</span>
+            <span>
+              {forkParentId
+                ? '输入内容即成新链 · Esc 取消分叉'
+                : 'Enter 发送 · Shift + Enter 换行'}
+            </span>
             <button
               className="send-button pixel-press"
               type="submit"
-              aria-label="发送消息"
+              aria-label={forkParentId ? '从新链生长提交' : '发送消息'}
               disabled={!draft.trim() || isGenerating}
             >
               <PixelIcon name="send" />

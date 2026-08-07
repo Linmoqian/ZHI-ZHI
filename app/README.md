@@ -27,15 +27,15 @@ ZHIZHI_MODEL=llama2:latest npm run dev
 
 ## 持久化
 
-默认会话只保存在进程内存中。设置 `ZHIZHI_DATA_DIR` 后启用文件持久化：
+`npm run dev` 默认在仓库根创建 `.zhizhi-data/` 目录并启用文件持久化，会话（回合树）与模型供应商配置都落盘，重启可恢复。可通过 `ZHIZHI_DATA_DIR` 指向其他目录：
 
 ```bash
-ZHIZHI_DATA_DIR=.zhizhi-data npm run dev
+ZHIZHI_DATA_DIR=/path/to/data npm run dev
 ```
 
-持久化采用**追加式事件日志 + 定期快照**：每次变更追加一条事件到 `<id>.journal.jsonl`，达到累积事件条数（默认 30）或空闲时长（默认 5 分钟）阈值时，自动把当前会话压缩为全量 `<id>.session.json` 快照并截断日志。快照写入原子替换，日志逐条落盘（fsync），崩溃时已落盘内容不丢失。启动时加载最近快照并重放其后日志，从而精确还原不可变 DAG 与上下文隔离语义。
+持久化：会话（回合树）、内容与供应商配置统一存储在单个 SQLite 数据库 `{ZHIZHI_DATA_DIR}/zhizhi.db`（默认 `.zhizhi-data/zhizhi.db`），使用 WAL 模式。每次变更以事务原子写入，进程崩溃或断电不残留半截数据，启动即恢复到最近状态。
 
-不设置 `ZHIZHI_DATA_DIR` 时，会话只保存在进程内存中，重启即失。
+供应商配置（含 API Key，仅服务端可见）也存于同一库的 `provider_settings` 表，不进版本库。
 
 ## 验证
 
@@ -70,6 +70,6 @@ npm run server:test
 
 ## MVP 边界
 
-- 数据默认保存在进程内存中；设置 `ZHIZHI_DATA_DIR` 后以追加式日志 + 定期快照持久化，重启可恢复。
+- 数据默认落盘到 `.zhizhi-data/`；可通过 `ZHIZHI_DATA_DIR` 指向其他目录。
 - 回答优先由本地 Ollama 生成；模型不可用时回退到确定性本地逻辑。
 - 暂不包含身份认证、数据库、附件、向量检索和持久化摘要树。

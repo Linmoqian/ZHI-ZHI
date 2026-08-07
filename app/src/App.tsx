@@ -6,9 +6,11 @@ import {
   useRef,
   useState,
 } from 'react'
+import { AnimatePresence } from 'motion/react'
 import './App.css'
 import { HomeView } from './components/HomeView'
 import { NavRail } from './components/NavRail'
+import { SettingsView } from './components/SettingsView'
 import { emitDebugEvent } from './lib/debugBus'
 import {
   clearLastSessionId,
@@ -44,6 +46,9 @@ function App() {
     TurnSessionSummary[]
   >([])
   const [toast, setToast] = useState('')
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  /** 待定分叉的父回合：点击分叉后地图显示虚影，用户输入即成新链。 */
+  const [forkTargetId, setForkTargetId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!toast) {
@@ -238,6 +243,7 @@ function App() {
         )
         setTurns((current) => [...current, turn])
         setActiveLeafId(turn.id)
+        setForkTargetId(null)
         showToast('已分叉出新的对话支线')
         emitDebugEvent('turn:fork', {
           sessionId,
@@ -267,6 +273,7 @@ function App() {
         view={view}
         onHome={goHome}
         onWorkspace={goWorkspace}
+        onOpenSettings={() => setSettingsOpen(true)}
         onShowSoon={(feature) => showToast(`${feature}将在后续版本开放`)}
       />
       {view === 'home' ? (
@@ -292,6 +299,7 @@ function App() {
             draftMode={draftMode}
             currentPanel={currentPanel}
             isGenerating={isGenerating}
+            forkParentId={forkTargetId}
             onPanelChange={setCurrentPanel}
             onBackHome={goHome}
             onSelectTurn={selectTurn}
@@ -300,6 +308,14 @@ function App() {
             }}
             onForkTurn={(turnId, content) => {
               void forkTurn(turnId, content)
+            }}
+            onBeginFork={(parentTurnId) => {
+              setForkTargetId(parentTurnId)
+              emitDebugEvent('fork:begin', { parentTurnId })
+            }}
+            onCancelFork={() => {
+              setForkTargetId(null)
+              emitDebugEvent('fork:cancel', {})
             }}
           />
         </Suspense>
@@ -314,6 +330,12 @@ function App() {
         </span>
         {toast}
       </div>
+
+      <AnimatePresence>
+        {settingsOpen && (
+          <SettingsView onClose={() => setSettingsOpen(false)} />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

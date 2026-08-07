@@ -14,8 +14,10 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { PixelIcon } from './PixelIcon'
+import { ForkGhostNode } from './ForkGhostNode'
 import {
   computeLayout,
+  LAYOUT,
   pathToRoot,
   toneForDepth,
   type PositionedTurn,
@@ -36,6 +38,7 @@ type TurnMapProps = {
   turns: TurnDTO[]
   activeLeafId: string | null
   draftMode: boolean
+  forkParentId: string | null
   onSelectTurn: (turnId: string) => void
 }
 
@@ -168,13 +171,14 @@ function TurnEdge({
   )
 }
 
-const nodeTypes = { turn: TurnNode }
+const nodeTypes = { turn: TurnNode, ghost: ForkGhostNode }
 const edgeTypes = { turn: TurnEdge }
 
 export function TurnMap({
   turns,
   activeLeafId,
   draftMode,
+  forkParentId,
   onSelectTurn,
 }: TurnMapProps) {
   const positioned = useMemo(() => computeLayout(turns), [turns])
@@ -226,6 +230,29 @@ export function TurnMap({
     [positioned, activePathIds],
   )
 
+  // 待定分叉：在地图附加一个白色虚影新节点（父节点下一列），并画虚线连接。
+  const forkGhost = useMemo(() => {
+    if (!forkParentId) {
+      return null
+    }
+    const parent = positioned.find((t) => t.id === forkParentId)
+    if (!parent) {
+      return null
+    }
+    const depth = parent.depth + 1
+    const x = LAYOUT.originX + depth * LAYOUT.columnWidth
+    const y = parent.y
+    const parentLabel =
+      parent.userContent.length > 10
+        ? `${parent.userContent.slice(0, 10)}…`
+        : parent.userContent
+    return {
+      parentId: forkParentId,
+      label: parentLabel,
+      position: { x, y } as { x: number; y: number },
+    }
+  }, [forkParentId, positioned])
+
   return (
     <section className="workspace-panel map-panel" aria-label="对话地图">
       <header className="panel-header">
@@ -251,8 +278,40 @@ export function TurnMap({
           </div>
         ) : (
           <ReactFlow
-            nodes={flowNodes}
-            edges={flowEdges}
+            nodes={
+              forkGhost
+                ? [
+                    ...flowNodes,
+                    {
+                      id: 'fork-ghost',
+                      type: 'ghost' as const,
+                      position: forkGhost.position,
+                      draggable: false,
+                      data: { parentLabel: forkGhost.label },
+                    },
+                  ]
+                : flowNodes
+            }
+            edges={
+              forkGhost
+                ? [
+                    ...flowEdges,
+                    {
+                      id: 'fork-ghost-edge',
+                      source: forkGhost.parentId,
+                      target: 'fork-ghost',
+                      type: 'smoothstep' as const,
+                      style: {
+                        stroke: '#b9b3a8',
+                        strokeWidth: 2,
+                        strokeDasharray: '6 5',
+                        opacity: 0.9,
+                      },
+                      animated: true,
+                    },
+                  ]
+                : flowEdges
+            }
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             nodesConnectable={false}

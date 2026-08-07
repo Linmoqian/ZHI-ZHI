@@ -88,3 +88,61 @@ export type GetTurnContextResponse = {
 export type ListTurnSessionsResponse = {
   sessions: TurnSessionSummary[]
 }
+
+// ============================================================================
+// 模型供应商设置 API 契约
+//
+// 供应商按方向（本地 / 云端）组织。云端的默认供应商为 DeepSeek。
+// API Key 仅保存在服务端，对外接口对其脱敏，不返回明文。
+// ============================================================================
+
+/** 供应商方向：本地推理或云端 API。 */
+export type ProviderKind = 'local' | 'cloud'
+
+/** 供应商配置（对外 DTO，不含 API Key 明文）。 */
+export type ProviderConfig = {
+  id: string
+  kind: ProviderKind
+  label: string
+  endpoint: string
+  model: string
+  /** API Key 是否已在服务端设置（云端供应商适用）。 */
+  apiKeySet: boolean
+  /** API Key 的脱敏片段（如 sk-****1234）；本地供应商为空。 */
+  apiKeyMasked?: string
+}
+
+/** 当前生效供应商信息（用于前端高亮，不携带敏感字段）。 */
+export type ActiveProvider = {
+  id: string
+  kind: ProviderKind
+  label: string
+}
+
+/** 供应商设置整体快照。 */
+export type ProviderSettingsDTO = {
+  providers: ProviderConfig[]
+  activeProviderId: string
+  active: ActiveProvider
+}
+
+/** 更新单个供应商的字段；apiKey 为空字符串或省略时保持不变。 */
+export type UpdateProviderRequest = {
+  label?: string
+  endpoint?: string
+  model?: string
+  /** 设置为 null 表示清除 Key；省略表示不修改。 */
+  apiKey?: string | null
+}
+
+/** 设置当前生效供应商的请求。 */
+export type SetActiveProviderRequest = {
+  providerId: string
+}
+
+/** 连通性检测结果。 */
+export type TestProviderResponse = {
+  ok: boolean
+  /** 失败原因或成功提示。 */
+  message: string
+}

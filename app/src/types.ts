@@ -3,6 +3,10 @@ export type {
   TurnSessionDTO,
   TurnSessionSummary,
   TurnContextDTO,
+  ProviderConfig,
+  ProviderKind,
+  ProviderSettingsDTO,
+  TestProviderResponse,
 } from '../shared/contracts'
 
 export type { PixelIconName } from './components/PixelIcon'

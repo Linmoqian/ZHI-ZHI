@@ -5,6 +5,8 @@ export type DebugEventName =
   | 'turn:create'
   | 'turn:append'
   | 'turn:fork'
+  | 'fork:begin'
+  | 'fork:cancel'
 
 export function emitDebugEvent(
   name: DebugEventName,

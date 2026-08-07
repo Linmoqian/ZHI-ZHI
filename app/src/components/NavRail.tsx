@@ -5,6 +5,7 @@ type NavRailProps = {
   view: AppView
   onHome: () => void
   onWorkspace: () => void
+  onOpenSettings: () => void
   onShowSoon: (feature: string) => void
 }
 
@@ -17,6 +18,7 @@ export function NavRail({
   view,
   onHome,
   onWorkspace,
+  onOpenSettings,
   onShowSoon,
 }: NavRailProps) {
   return (
@@ -70,7 +72,7 @@ export function NavRail({
           className="nav-button"
           type="button"
           aria-label="设置"
-          onClick={() => onShowSoon('设置')}
+          onClick={onOpenSettings}
         >
           <PixelIcon name="settings" />
           <span>设置</span>

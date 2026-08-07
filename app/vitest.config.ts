@@ -14,18 +14,46 @@ const repoRoot = resolve(configDir, '..')
 
 export default defineConfig({
   plugins: [react()],
+  // root 保持 app/，使 vite 能正常解析 node_modules（react 等装在 app/node_modules）。
+  // 测试文件用相对仓库根的 glob 引入，并放宽 fs 访问范围。
+  root: configDir,
+  resolve: {
+    alias: {
+      // 测试文件位于仓库根 tests/，vite 从该目录向上找不到 app/node_modules；
+      // 显式别名把 testing-library 指回 app/node_modules。
+      '@testing-library/react': resolve(
+        configDir,
+        'node_modules/@testing-library/react',
+      ),
+      '@testing-library/user-event': resolve(
+        configDir,
+        'node_modules/@testing-library/user-event',
+      ),
+      react: resolve(configDir, 'node_modules/react'),
+      'react-dom': resolve(configDir, 'node_modules/react-dom'),
+      motion: resolve(configDir, 'node_modules/motion'),
+      // 桌面壳 IPC 包同样位于 app/node_modules，测试侧需要解析到同一文件，
+      // 否则 vi.mock 的注册路径与真实模块不一致，mock 不会生效。
+      '@tauri-apps/api/window': resolve(
+        configDir,
+        'node_modules/@tauri-apps/api/window.js',
+      ),
+    },
+  },
   server: {
     fs: {
-      // 允许 vite/vitest 访问仓库根之外（含 app/ 与 tests/）的文件。
       allow: [repoRoot],
+    },
+    deps: {
+      // 让 vite 在 interop 裸依赖时也查找 app/node_modules。
+      moduleDirectories: ['node_modules', resolve(configDir, 'node_modules')],
     },
   },
   test: {
-    root: repoRoot,
     environment: 'jsdom',
-    include: ['tests/frontend/**/*.test.{ts,tsx}'],
+    include: ['../tests/frontend/**/*.test.{ts,tsx}'],
     exclude: ['**/node_modules/**', '**/dist/**'],
     globals: true,
-    setupFiles: ['app/src/test/setup.ts'],
+    setupFiles: ['src/test/setup.ts'],
   },
 })

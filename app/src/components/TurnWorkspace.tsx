@@ -11,11 +11,14 @@ type TurnWorkspaceProps = {
   draftMode: boolean
   currentPanel: WorkspacePanel
   isGenerating: boolean
+  forkParentId: string | null
   onPanelChange: (panel: WorkspacePanel) => void
   onBackHome: () => void
   onSelectTurn: (turnId: string) => void
   onSendMessage: (content: string) => void
   onForkTurn: (parentTurnId: string, content: string) => void
+  onBeginFork: (parentTurnId: string) => void
+  onCancelFork: () => void
 }
 
 const panelTabs: { id: WorkspacePanel; label: string }[] = [
@@ -29,11 +32,14 @@ export function TurnWorkspace({
   draftMode,
   currentPanel,
   isGenerating,
+  forkParentId,
   onPanelChange,
   onBackHome,
   onSelectTurn,
   onSendMessage,
   onForkTurn,
+  onBeginFork,
+  onCancelFork,
 }: TurnWorkspaceProps) {
   const [isMapVisible, setIsMapVisible] = useState(true)
   const [mapRatio, setMapRatio] = useState(0.35)
@@ -96,6 +102,7 @@ export function TurnWorkspace({
             turns={turns}
             activeLeafId={activeLeafId}
             draftMode={draftMode}
+            forkParentId={forkParentId}
             onSelectTurn={onSelectTurn}
           />
         }
@@ -105,8 +112,11 @@ export function TurnWorkspace({
             activeLeafId={activeLeafId}
             draftMode={draftMode}
             isGenerating={isGenerating}
+            forkParentId={forkParentId}
             onSendMessage={onSendMessage}
             onForkTurn={onForkTurn}
+            onBeginFork={onBeginFork}
+            onCancelFork={onCancelFork}
           />
         }
       />

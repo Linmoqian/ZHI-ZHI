@@ -84,6 +84,31 @@ svg {
   min-height: 100svh;
 }
 
+/* 隐藏视觉滚动条，但保留滚轮 / 触控板 / 键盘滚动能力。 */
+* {
+  scrollbar-width: none; /* Firefox */
+}
+
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* 无边框桌面窗口：标题栏 + 主体纵向布局 */
+.desktop-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100svh;
+  overflow: hidden;
+  background: var(--paper);
+}
+
+.desktop-shell .app-shell {
+  flex: 1 1 auto;
+  height: auto;
+}
+
 .tone-blue {
   --tone: #4285ea;
   --tone-light: #dceaff;

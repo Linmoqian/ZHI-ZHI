@@ -6,7 +6,8 @@ import test from 'node:test'
 import { ContentStore } from '../../app/server/src/contentStore.ts'
 import type { ModelGateway } from '../../app/server/src/modelGateway.ts'
 import { TurnSessionStore } from '../../app/server/src/turnStore.ts'
-import { createTurnJournaledPersistor } from '../../app/server/src/turnJournal.ts'
+import { createSqlitePersistor } from '../../app/server/src/sqlitePersistor.ts'
+import { openDatabase } from '../../app/server/src/db.ts'
 
 function createFakeGateway(reply = '测试回复'): ModelGateway {
   return {
@@ -172,7 +173,8 @@ test('不存在的回合抛出 404', async () => {
 
 test('persist 后通过 persistor.load 能完整恢复会话', async () => {
   const tmpDir = await mkdtemp(path.join(tmpdir(), 'zhizhi-turn-'))
-  const persistor = createTurnJournaledPersistor(tmpDir)
+  const db = openDatabase(tmpDir)
+  const persistor = createSqlitePersistor(db)
   const contentStore = new ContentStore()
   const store = await TurnSessionStore.create(
     '持久化全链路',
@@ -201,6 +203,7 @@ test('persist 后通过 persistor.load 能完整恢复会话', async () => {
   assert.equal(context.turns.length, 2)
   assert.equal(context.turns[1].userContent, '跟进问题')
   assert.equal(context.turns[0].assistantContent, '根回复')
+  db.close()
 })
 
 test('未配置 persistor 时 persist 为空操作', async () => {
@@ -216,9 +219,10 @@ test('未配置 persistor 时 persist 为空操作', async () => {
   assert.equal(store.listTurns().length, 1)
 })
 
-test('编辑回合产生 turn_updated 事件且可恢复', async () => {
+test('编辑回合持久化后可从 dump 恢复', async () => {
   const tmpDir = await mkdtemp(path.join(tmpdir(), 'zhizhi-turn-'))
-  const persistor = createTurnJournaledPersistor(tmpDir)
+  const db = openDatabase(tmpDir)
+  const persistor = createSqlitePersistor(db)
   const contentStore = new ContentStore()
   const store = await TurnSessionStore.create(
     '编辑持久化',
@@ -238,4 +242,5 @@ test('编辑回合产生 turn_updated 事件且可恢复', async () => {
   )
   const context = restored.compileContext(restored.rootId!)
   assert.equal(context.turns[0].userContent, '修改后的问题')
+  db.close()
 })

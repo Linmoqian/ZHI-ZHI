@@ -4,6 +4,10 @@ import type {
 } from 'node:http'
 import { ApiError } from './errors.ts'
 import { TurnStoreRegistry } from './turnStoreRegistry.ts'
+import type {
+  SetActiveProviderRequest,
+  UpdateProviderRequest,
+} from '../../shared/contracts.ts'
 
 const MAX_BODY_BYTES = 64 * 1024
 
@@ -41,6 +45,73 @@ export function createApiHandler(
           status: 'ok',
           service: 'zhizhi-backend',
         })
+        return
+      }
+
+      // ----------------------------------------------------------------
+      // 供应商设置路由（/api/settings/providers）
+      // ----------------------------------------------------------------
+
+      const isProvidersRoot =
+        segments.length === 3 &&
+        segments[0] === 'api' &&
+        segments[1] === 'settings' &&
+        segments[2] === 'providers'
+
+      if (request.method === 'GET' && isProvidersRoot) {
+        sendJson(response, 200, turnRegistry.getProviderSettings())
+        return
+      }
+
+      // /api/settings/providers/active
+      if (
+        isProvidersRoot === false &&
+        segments[0] === 'api' &&
+        segments[1] === 'settings' &&
+        segments[2] === 'providers' &&
+        segments[3] === 'active' &&
+        request.method === 'PUT'
+      ) {
+        const body = await readJson(request)
+        const providerId = requireString(
+          (body as SetActiveProviderRequest).providerId,
+          '供应商 id 不能为空',
+        )
+        const settings = await turnRegistry.setActiveProvider(providerId)
+        sendJson(response, 200, settings)
+        return
+      }
+
+      // /api/settings/providers/:id/test
+      const isProviderTest =
+        segments[0] === 'api' &&
+        segments[1] === 'settings' &&
+        segments[2] === 'providers' &&
+        typeof segments[3] === 'string' &&
+        segments[4] === 'test' &&
+        request.method === 'POST'
+      if (isProviderTest) {
+        const result = await turnRegistry.testProvider(segments[3])
+        sendJson(response, 200, result)
+        return
+      }
+
+      // /api/settings/providers/:id (PATCH)
+      const isProviderItem =
+        segments[0] === 'api' &&
+        segments[1] === 'settings' &&
+        segments[2] === 'providers' &&
+        typeof segments[3] === 'string' &&
+        segments.length === 4 &&
+        request.method === 'PATCH'
+      if (isProviderItem) {
+        const body = await readJson(request)
+        const patch = coerceUpdateProviderPatch(body)
+        const settings = await turnRegistry.updateProvider(
+          segments[3],
+          patch,
+        )
+        sendJson(response, 200, settings)
         return
       }
 
@@ -217,6 +288,30 @@ function requireString(value: unknown, message: string) {
     throw new ApiError(400, 'INVALID_INPUT', message)
   }
   return value
+}
+
+/** 将请求体校验为 UpdateProviderRequest；apiKey 接受空串/省略/字符串/null。 */
+function coerceUpdateProviderPatch(body: JsonObject): UpdateProviderRequest {
+  const patch: UpdateProviderRequest = {}
+  if (typeof body.label === 'string' && body.label.trim()) {
+    patch.label = body.label
+  }
+  if (typeof body.endpoint === 'string' && body.endpoint.trim()) {
+    patch.endpoint = body.endpoint
+  }
+  if (typeof body.model === 'string' && body.model.trim()) {
+    patch.model = body.model
+  }
+  if (body.apiKey !== undefined) {
+    if (body.apiKey === null) {
+      patch.apiKey = null
+    } else if (typeof body.apiKey === 'string') {
+      patch.apiKey = body.apiKey
+    } else {
+      throw new ApiError(400, 'INVALID_INPUT', 'apiKey 必须是字符串或 null')
+    }
+  }
+  return patch
 }
 
 function setCommonHeaders(response: ServerResponse) {

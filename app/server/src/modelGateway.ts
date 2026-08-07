@@ -5,6 +5,8 @@ export type ModelGateway = {
   complete(input: ModelInput): Promise<string>
   /** 用独立提示词生成「一句话概括」；失败时抛出异常。 */
   summarize(content: string): Promise<string>
+  /** 连通性探测，供设置页「测试连接」使用。 */
+  testConnection(): Promise<{ ok: true; message: string } | { ok: false; message: string }>
 }
 
 export type ModelInput = {
@@ -129,6 +131,26 @@ export function createOllamaGateway(options: {
     return content
   }
 
+  async function probeTags() {
+    const response = await fetchImpl(`${endpoint}/api/tags`, {
+      signal: AbortSignal.timeout(15_000),
+    })
+    if (!response.ok) {
+      throw new Error(
+        `Ollama 探测失败：HTTP ${response.status} ${response.statusText}`,
+      )
+    }
+    const payload = (await response.json()) as {
+      models?: Array<{ name?: string }>
+    }
+    const available = payload.models?.some(
+      (entry) => entry.name === model,
+    )
+    return available
+      ? `已连接 Ollama，模型 ${model} 可用`
+      : `已连接 Ollama，但未找到模型 ${model}（请先拉取）`
+  }
+
   return {
     async complete(input) {
       const conversation = toChatMessages(input)
@@ -141,6 +163,16 @@ export function createOllamaGateway(options: {
         { role: 'system', content: SUMMARIZE_SYSTEM_PROMPT },
         { role: 'user', content },
       ])
+    },
+
+    async testConnection() {
+      try {
+        const message = await probeTags()
+        return { ok: true, message }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        return { ok: false, message }
+      }
     },
   }
 }
@@ -155,4 +187,126 @@ export function resolveModelFromEnv(env: NodeJS.ProcessEnv): string {
   }
   // 默认使用本地最小、最稳定的文本模型，避免硬件卡死。
   return 'llama2:latest'
+}
+
+// -----------------------------------------------------------------------------
+// 云端供应商：DeepSeek（OpenAI 兼容接口）
+//
+// 文档：https://api-docs.deepseek.com/zh-cn/
+// 端点：POST {baseUrl}/chat/completions，Header Authorization: Bearer <apiKey>
+// 模型：deepseek-v4-flash / deepseek-reasoner（R1），默认 deepseek-v4-flash
+// -----------------------------------------------------------------------------
+
+export const DEFAULT_DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
+export const DEFAULT_DEEPSEEK_MODEL = 'deepseek-v4-flash'
+
+/** DeepSeek（及兼容端点）网关，走 OpenAI 兼容的 chat/completions。 */
+export function createDeepSeekGateway(options: {
+  apiKey: string
+  baseUrl?: string
+  model?: string
+  numPredict?: number
+  temperature?: number
+  fetchImpl?: typeof fetch
+}): ModelGateway {
+  const baseUrl = (options.baseUrl ?? DEFAULT_DEEPSEEK_BASE_URL).replace(
+    /\/$/,
+    '',
+  )
+  const model = options.model ?? DEFAULT_DEEPSEEK_MODEL
+  const apiKey = options.apiKey.trim()
+  const numPredict = options.numPredict ?? 1024
+  const temperature = options.temperature ?? 0.4
+  const fetchImpl = options.fetchImpl ?? fetch
+
+  async function chat(
+    messages: ChatMessage[],
+    overrides?: { temperature?: number },
+  ) {
+    const response = await fetchImpl(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: false,
+        max_tokens: overrides ? undefined : numPredict,
+        temperature: overrides?.temperature ?? temperature,
+      }),
+      signal: AbortSignal.timeout(120_000),
+    })
+
+    if (!response.ok) {
+      const detail = await safeReadError(response)
+      throw new Error(
+        `DeepSeek 请求失败：HTTP ${response.status} ${response.statusText}${detail}`,
+      )
+    }
+
+    const payload = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>
+      error?: { message?: string } | string
+    }
+    const errorMessage =
+      typeof payload.error === 'string'
+        ? payload.error
+        : payload.error?.message
+    if (errorMessage) {
+      throw new Error(`DeepSeek 返回错误：${errorMessage}`)
+    }
+    const content = payload.choices?.[0]?.message?.content?.trim()
+    if (!content) {
+      throw new Error('DeepSeek 返回了空回复')
+    }
+    return content
+  }
+
+  async function probeModels() {
+    const response = await fetchImpl(`${baseUrl}/models`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(15_000),
+    })
+    if (!response.ok) {
+      const detail = await safeReadError(response)
+      throw new Error(
+        `DeepSeek 鉴权失败：HTTP ${response.status}${detail}`,
+      )
+    }
+    return `已连接 DeepSeek，模型 ${model}`
+  }
+
+  return {
+    async complete(input) {
+      return chat(toChatMessages(input))
+    },
+
+    async summarize(content) {
+      return chat([
+        { role: 'system', content: SUMMARIZE_SYSTEM_PROMPT },
+        { role: 'user', content },
+      ])
+    },
+
+    async testConnection() {
+      try {
+        const message = await probeModels()
+        return { ok: true, message }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        return { ok: false, message }
+      }
+    },
+  }
+}
+
+async function safeReadError(response: Response): Promise<string> {
+  try {
+    const text = await response.text()
+    return text ? `：${text.slice(0, 200)}` : ''
+  } catch {
+    return ''
+  }
 }

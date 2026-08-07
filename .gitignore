@@ -30,3 +30,10 @@ lerna-debug.log*
 *.sln
 *.sw?
 .playwright-cli/
+
+# 本地持久化数据（会话日志与供应商配置，含 API Key）
+.zhizhi-data/
+
+# Rust / Tauri 构建产物
+app/src-tauri/target/
+app/src-tauri/gen/schemas/

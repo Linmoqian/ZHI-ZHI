@@ -223,61 +223,61 @@ type ApiErrorPayload = {
 
 ## 5. 持久化结构
 
-> 定义于 `app/server/src/turnJournal.ts`。采用**追加日志 + 定期快照**模式。
+> 定义于 `app/server/src/db.ts`（建表）、`sqlitePersistor.ts`（会话读写）。
+> 采用单个 **SQLite** 数据库文件，统一存储会话、内容与供应商配置。
 
-### 5.1 事件类型
+### 5.1 表结构
 
-只有两种事件，覆盖全部变更：
+```sql
+CREATE TABLE sessions (
+  id          TEXT PRIMARY KEY,
+  topic       TEXT NOT NULL,
+  created_at  TEXT NOT NULL
+);
 
-```ts
-type TurnJournalEvent =
-  | {
-      type: 'turn_appended'          // 新增回合（生长或分叉）
-      sessionId: string
-      turn: SerializedTurn           // 回合结构（含哈希）
-      userContent: string            // 原文（自包含，可重放）
-      assistantContent: string
-      createdAt: string
-    }
-  | {
-      type: 'turn_updated'           // 编辑回合内容
-      sessionId: string
-      turn: SerializedTurn
-      userContent?: string           // 仅变更字段携带
-      assistantContent?: string
-    }
+CREATE TABLE content_blobs (
+  hash            TEXT PRIMARY KEY,   -- SHA-256
+  content         TEXT NOT NULL,
+  reference_count INTEGER NOT NULL DEFAULT 0
+);
 
-type SerializedTurn = {
-  id: string
-  parentId: string | null
-  userContentHash: string
-  assistantContentHash: string
-  createdAt: string
-}
+CREATE TABLE turns (
+  id                   TEXT PRIMARY KEY,
+  session_id           TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  parent_id            TEXT REFERENCES turns(id) ON DELETE CASCADE,
+  user_content_hash    TEXT NOT NULL REFERENCES content_blobs(hash),
+  assistant_content_hash TEXT NOT NULL REFERENCES content_blobs(hash),
+  created_at           TEXT NOT NULL
+);
+
+CREATE TABLE provider_settings (
+  id        TEXT PRIMARY KEY,         -- provider-local-ollama / provider-cloud-deepseek
+  kind      TEXT NOT NULL,            -- local | cloud
+  label     TEXT NOT NULL,
+  endpoint  TEXT NOT NULL,
+  model     TEXT NOT NULL,
+  api_key   TEXT NOT NULL DEFAULT '', -- 仅服务端可见
+  is_active INTEGER NOT NULL DEFAULT 0
+);
 ```
 
-**设计要点**：事件自包含——携带原文而非仅哈希，重放时无需外部查找。
+数据库文件位于 `{ZHIZHI_DATA_DIR}/zhizhi.db`（WAL 模式，`foreign_keys = ON`）。
+`content_blobs` 表实现内容寻址去重：`turns` 引用哈希，相同内容在库内共享一份明文。
 
-### 5.2 存储格式
+### 5.2 写入与恢复
 
-```
-.data/turn-sessions/
-├── <sessionId>/
-│   ├── events.log          # 追加日志，每行一个 JSON 事件
-│   └── snapshot.json       # 定期快照（达到事件阈值后压缩生成）
-```
-
-- 写入：事件追加到 `events.log`
-- 压缩：达到阈值（默认 64 事件）后，将全量状态写入 `snapshot.json`，清空日志
-- 读取：先加载快照，再重放日志中剩余事件
+- 写入：`TurnSessionStore.persist()` 调用 `save(sessionId, dump)`，在一个事务内覆写 `sessions` + `turns` + upsert 涉及的 `content_blobs`。事务保证原子性，崩溃/断电不残留半截数据。
+- 恢复：`load(sessionId)` 一次 SELECT 出回合行与对应明文，重建 `TurnSessionDump`（含引用计数）。
+- WAL 模式提升并发读；每次写操作即时落盘。
 
 ### 5.3 Persistor 接口
 
 ```ts
 type TurnPersistor = {
-  append(sessionId, events, snapshot): Promise<void>
+  save(sessionId, dump): Promise<void>
   load(sessionId): Promise<TurnSessionDump | null>
   listSessionIds(): Promise<string[]>
+  deleteSession(sessionId): Promise<void>
 }
 ```
 
@@ -346,7 +346,7 @@ t3 的上下文 = [t1, t3]        ← t2 不可见
 | 层 | 用户输入字段 | 类型 | 说明 |
 |----|-------------|------|------|
 | 领域模型 (`TurnNode`) | `userContentHash` | string | SHA-256 哈希 |
-| 持久化事件 | `userContent` | string | 明文（自包含） |
+| 持久化 | `userContentHash` | string | SHA-256 哈希（content_blobs 表存明文） |
 | API DTO (`TurnDTO`) | `userContent` | string | 明文（已解析） |
 
 ### 8.2 树结构表示对照
@@ -355,7 +355,7 @@ t3 的上下文 = [t1, t3]        ← t2 不可见
 |----|--------|--------|------|
 | 领域模型 | `parentId`（不可变） | 无（派生） | `Map<id, TurnNode>` |
 | API DTO | `parentId` | 无 | 数组，前端自行建索引 |
-| 持久化 | `parentId` | 无 | 日志/快照 |
+| 持久化 | `parentId` | 无 | turns 表（按 session_id 索引） |
 
 ### 8.3 为什么没有这些字段
 

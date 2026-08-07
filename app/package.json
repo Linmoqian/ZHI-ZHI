@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/dev.mjs",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "dev:desktop": "node scripts/dev.mjs",
     "dev:frontend": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
@@ -17,16 +20,23 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
+    "@tauri-apps/api": "^2.11.1",
     "@xyflow/react": "^12.11.2",
+    "better-sqlite3": "^13.0.3",
+    "dompurify": "^3.4.13",
+    "marked": "^18.0.9",
     "motion": "^13.0.0",
     "pixelarticons": "^2.2.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.3",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/dompurify": "^3.0.5",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

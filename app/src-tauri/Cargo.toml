@@ -1,0 +1,24 @@
+[package]
+name = "zhizhi"
+version = "0.1.0"
+description = "知枝桌面壳"
+authors = ["ZHI-ZHI"]
+edition = "2021"
+
+# 桌面薄层：仅承担窗口壳与侧边进程托管，不承载业务逻辑。
+# 业务数据事实来源是 Node HTTP 后端（app/server）。
+[lib]
+name = "zhizhi_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
