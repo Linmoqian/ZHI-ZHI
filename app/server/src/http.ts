@@ -12,12 +12,16 @@ import {
   type CreateBranchInput,
   type UpdateNodeInput,
 } from './learningStore.ts'
+import { TurnStoreRegistry } from './turnStoreRegistry.ts'
 
 const MAX_BODY_BYTES = 64 * 1024
 
 type JsonObject = Record<string, unknown>
 
-export function createApiHandler(store = new LearningStore()) {
+export function createApiHandler(
+  store = new LearningStore(),
+  turnRegistry = new TurnStoreRegistry(),
+) {
   return async (request: IncomingMessage, response: ServerResponse) => {
     setCommonHeaders(response)
 
@@ -208,6 +212,130 @@ export function createApiHandler(store = new LearningStore()) {
         sendJson(response, 200, {
           knowledgeMap: store.getKnowledgeMap(segments[2]),
         })
+        return
+      }
+
+      // ------------------------------------------------------------------
+      // 回合树路由（/api/turn-sessions）
+      // ------------------------------------------------------------------
+
+      const isTurnSessionRoot =
+        segments.length === 2 &&
+        segments[0] === 'api' &&
+        segments[1] === 'turn-sessions'
+
+      if (
+        request.method === 'POST' &&
+        isTurnSessionRoot
+      ) {
+        const body = await readJson(request)
+        const userContent = requireString(body.userContent, '用户输入不能为空')
+        const turnStore = await turnRegistry.createSession(userContent)
+        sendJson(response, 201, {
+          session: turnRegistry.toSessionDTO(turnStore),
+        })
+        return
+      }
+
+      if (request.method === 'GET' && isTurnSessionRoot) {
+        sendJson(response, 200, {
+          sessions: await turnRegistry.listSessions(),
+        })
+        return
+      }
+
+      const isTurnSessionRoute =
+        segments[0] === 'api' &&
+        segments[1] === 'turn-sessions' &&
+        typeof segments[2] === 'string'
+
+      if (
+        isTurnSessionRoute &&
+        request.method === 'GET' &&
+        segments.length === 3
+      ) {
+        const turnStore = await turnRegistry.getSession(segments[2])
+        sendJson(response, 200, {
+          session: turnRegistry.toSessionDTO(turnStore),
+        })
+        return
+      }
+
+      // /api/turn-sessions/:id/turns
+      const isTurnsRoute =
+        isTurnSessionRoute && segments[3] === 'turns'
+
+      if (
+        isTurnsRoute &&
+        request.method === 'POST' &&
+        segments.length === 4
+      ) {
+        const body = await readJson(request)
+        const parentId = requireString(body.parentId, '父回合不能为空')
+        const userContent = requireString(body.userContent, '用户输入不能为空')
+        const turnStore = await turnRegistry.getSession(segments[2])
+        const turn = await turnStore.appendTurn({ parentId, userContent })
+        await turnStore.persist()
+        sendJson(response, 201, { turn: turnRegistry.toTurnDTO(turnStore, turn.id) })
+        return
+      }
+
+      // /api/turn-sessions/:id/turns/:turnId/fork
+      const isTurnForkRoute =
+        isTurnsRoute &&
+        typeof segments[4] === 'string' &&
+        segments[5] === 'fork'
+
+      if (
+        isTurnForkRoute &&
+        request.method === 'POST'
+      ) {
+        const body = await readJson(request)
+        const userContent = requireString(body.userContent, '用户输入不能为空')
+        const turnStore = await turnRegistry.getSession(segments[2])
+        const turn = await turnStore.forkTurn({
+          parentId: segments[4],
+          userContent,
+        })
+        await turnStore.persist()
+        sendJson(response, 201, { turn: turnRegistry.toTurnDTO(turnStore, turn.id) })
+        return
+      }
+
+      // /api/turn-sessions/:id/turns/:turnId  (PATCH 编辑)
+      if (
+        isTurnsRoute &&
+        request.method === 'PATCH' &&
+        typeof segments[4] === 'string' &&
+        segments.length === 5
+      ) {
+        const body = await readJson(request)
+        const turnStore = await turnRegistry.getSession(segments[2])
+        const updated = turnStore.updateTurn(segments[4], {
+          userContent:
+            typeof body.userContent === 'string'
+              ? body.userContent
+              : undefined,
+          assistantContent:
+            typeof body.assistantContent === 'string'
+              ? body.assistantContent
+              : undefined,
+        })
+        await turnStore.persist()
+        sendJson(response, 200, { turn: turnRegistry.toTurnDTO(turnStore, updated.id) })
+        return
+      }
+
+      // /api/turn-sessions/:id/turns/:turnId/context
+      const isTurnContextRoute =
+        isTurnsRoute &&
+        typeof segments[4] === 'string' &&
+        segments[5] === 'context'
+
+      if (isTurnContextRoute && request.method === 'GET') {
+        const turnStore = await turnRegistry.getSession(segments[2])
+        const context = turnStore.compileContext(segments[4])
+        sendJson(response, 200, { context })
         return
       }
 
