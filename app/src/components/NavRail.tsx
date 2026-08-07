@@ -8,9 +8,9 @@ type NavRailProps = {
   onShowSoon: (feature: string) => void
 }
 
-const secondaryItems: { label: string; icon: PixelIconName }[] = [
-  { label: '学习收藏', icon: 'book' },
-  { label: '学习进度', icon: 'chart' },
+const secondaryItems: { label: string; icon: PixelIconName; display: string }[] = [
+  { label: '学习收藏', icon: 'book', display: '收藏' },
+  { label: '学习进度', icon: 'chart', display: '进度' },
 ]
 
 export function NavRail({
@@ -60,7 +60,7 @@ export function NavRail({
             onClick={() => onShowSoon(item.label)}
           >
             <PixelIcon name={item.icon} />
-            <span>{item.label === '学习收藏' ? '收藏' : '进度'}</span>
+            <span>{item.display}</span>
           </button>
         ))}
       </nav>
