@@ -12,12 +12,13 @@ import type {
   UpdateTurnResponse,
 } from '../../shared/contracts'
 import { LearningApiError } from './apiError'
+import { API_BASE_URL } from '../lib/apiConfig'
 
 async function request<T extends object>(path: string, init: RequestInit) {
   let response: Response
 
   try {
-    response = await fetch(path, {
+    response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
       headers: {
         'Content-Type': 'application/json',
