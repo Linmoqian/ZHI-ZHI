@@ -3,12 +3,18 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from 'react'
 import './App.css'
 import { HomeView } from './components/HomeView'
 import { NavRail } from './components/NavRail'
 import { emitDebugEvent } from './lib/debugBus'
+import {
+  clearLastSessionId,
+  loadLastSessionId,
+  saveLastSessionId,
+} from './lib/lastSession'
 import { turnApi } from './services/turnApi'
 import { LearningApiError } from './services/apiError'
 import type {
@@ -108,6 +114,7 @@ function App() {
         setDraftMode(false)
         setCurrentPanel('conversation')
         setIsGenerating(false)
+        saveLastSessionId(session.id)
         emitDebugEvent('view:change', {
           view: 'workspace',
           source: 'resume',
@@ -115,20 +122,41 @@ function App() {
         })
       } catch (error) {
         setView('home')
+        // 会话可能已被删除，清除过期记录
+        clearLastSessionId()
         showApiError(error)
       }
     },
     [showApiError],
   )
 
+  // 应用启动时恢复上次打开的会话；若无记录则留在首页。
+  const hasRestoredRef = useRef(false)
+  useEffect(() => {
+    if (hasRestoredRef.current) {
+      return
+    }
+    hasRestoredRef.current = true
+    const lastId = loadLastSessionId()
+    if (lastId) {
+      void resumeSession(lastId)
+    }
+  }, [resumeSession])
+
   const goWorkspace = useCallback(() => {
+    // 优先恢复上次会话；无记录才进入空白草稿。
     if (!sessionId && !draftMode) {
+      const lastId = loadLastSessionId()
+      if (lastId) {
+        void resumeSession(lastId)
+        return
+      }
       startNewConversation()
       return
     }
     setView('workspace')
     setCurrentPanel('conversation')
-  }, [sessionId, draftMode, startNewConversation])
+  }, [sessionId, draftMode, startNewConversation, resumeSession])
 
   /**
    * 发送消息：
@@ -157,6 +185,7 @@ function App() {
           const root = session.turns[0]
           setActiveLeafId(root.id)
           setDraftMode(false)
+          saveLastSessionId(session.id)
           emitDebugEvent('turn:create', {
             sessionId: session.id,
             turnId: root.id,
