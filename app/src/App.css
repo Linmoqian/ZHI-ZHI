@@ -701,9 +701,6 @@
   height: 17px;
 }
 
-@media (hover: hover) and (pointer: fine) {
-}
-
 /* Workspace shell */
 
 .workspace-view {
