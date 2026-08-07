@@ -7,9 +7,9 @@ import type {
   CreateTurnSessionResponse,
   GetTurnContextResponse,
   ListTurnSessionsResponse,
-} from '../../shared/contracts.ts'
-import { createApiHandler } from '../src/http.ts'
-import { TurnStoreRegistry } from '../src/turnStoreRegistry.ts'
+} from '../../app/shared/contracts.ts'
+import { createApiHandler } from '../../app/server/src/http.ts'
+import { TurnStoreRegistry } from '../../app/server/src/turnStoreRegistry.ts'
 import { createFakeGateway } from './testGateway.ts'
 
 test('回合树：创建会话返回根回合，列表可见', async () => {

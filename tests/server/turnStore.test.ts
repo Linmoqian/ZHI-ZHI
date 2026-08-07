@@ -3,10 +3,10 @@ import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import { ContentStore } from '../src/contentStore.ts'
-import type { ModelGateway } from '../src/modelGateway.ts'
-import { TurnSessionStore } from '../src/turnStore.ts'
-import { createTurnJournaledPersistor } from '../src/turnJournal.ts'
+import { ContentStore } from '../../app/server/src/contentStore.ts'
+import type { ModelGateway } from '../../app/server/src/modelGateway.ts'
+import { TurnSessionStore } from '../../app/server/src/turnStore.ts'
+import { createTurnJournaledPersistor } from '../../app/server/src/turnJournal.ts'
 
 function createFakeGateway(reply = '测试回复'): ModelGateway {
   return {

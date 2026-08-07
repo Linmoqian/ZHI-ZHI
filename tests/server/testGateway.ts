@@ -1,4 +1,7 @@
-import type { ModelGateway, ModelInput } from '../src/modelGateway.ts'
+import type {
+  ModelGateway,
+  ModelInput,
+} from '../../app/server/src/modelGateway.ts'
 
 /**
  * 测试用模型网关：不访问网络，始终返回固定回复。

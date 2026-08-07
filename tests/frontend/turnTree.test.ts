@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TurnDTO } from '../types'
+import type { TurnDTO } from '../../app/src/types'
 import {
   buildChildIndex,
   childrenOf,
@@ -11,7 +11,7 @@ import {
   pathToRoot,
   toneForDepth,
   TURN_TONES,
-} from './turnTree'
+} from '../../app/src/lib/turnTree'
 
 /** 构造一个回合的辅助函数。 */
 function turn(

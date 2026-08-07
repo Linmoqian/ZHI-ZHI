@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "server:dev": "node --watch server/src/index.ts",
     "server:start": "node server/src/index.ts",
-    "server:test": "node --test server/tests/*.test.ts",
+    "server:test": "node --test ../tests/server/*.test.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
